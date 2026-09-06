@@ -10,9 +10,9 @@ npm install
 npm run dev
 ```
 
-## État : étape 1 terminée
+## État : étapes 1 et 2 terminées
 
-Le cœur de l'application fonctionne.
+### Le moteur
 
 - **Pot de peinture** — remplissage par zone borné par le trait du modèle, avec
   dilatation d'un pixel pour supprimer le liseré blanc le long des contours.
@@ -25,12 +25,34 @@ Le cœur de l'application fonctionne.
   (l'historique ne consomme pas toute la mémoire).
 - **Zoom et déplacement** à deux doigts, molette sur ordinateur.
 - **Apple Pencil** — pression et inclinaison, rejet de la paume.
+- **Journal des gestes** — chaque action est consignée puis sauvegardée avec
+  l'œuvre. C'est lui qui permet de réimprimer en 300 dpi, et il ouvrira la voie
+  au rejeu accéléré.
+
+### L'atelier
+
 - **Sauvegarde automatique** dans IndexedDB, reprise d'un coloriage en cours,
   galerie « Mes coloriages », signature au prénom de l'enfant.
 - **10 coloriages licorne originaux**, classés en deux niveaux.
 
-Chaque geste est également consigné dans un journal (`Editor.journal`) : c'est ce
-qui permettra le rejeu accéléré et le réexport en 300 dpi sans refaire le moteur.
+### Sortie et impression
+
+- **Impression A4 à 300 dpi** (2480 × 3508 px). Le calque d'écran n'est pas
+  agrandi : le modèle est rerasterisé depuis le SVG et les gestes sont rejoués à
+  l'échelle, donc le trait reste net. Sur iPad, la boîte d'impression de Safari
+  propose « Enregistrer en PDF » — c'est l'export PDF, sans dépendance.
+- **Partage natif** (Photos, Fichiers, Mail, AirDrop) quand l'appareil le
+  propose, téléchargement classique sinon.
+- **Signature** — prénom et date posés sur l'œuvre au moment de la sortie.
+- **Portail parental** devant l'impression, l'envoi et l'effacement total : une
+  multiplication, valable deux minutes pour ne pas la redemander à chaque geste.
+
+### Installation et hors ligne
+
+Installable sur l'écran d'accueil (manifeste, icônes, mode `standalone`, aucune
+orientation forcée). Le service worker précharge toute l'application ; les
+polices Google sont mises en cache à la première visite. Une fois installée,
+l'appli fonctionne sans réseau — voiture, train, salle d'attente.
 
 ## Mise en ligne
 
@@ -89,11 +111,10 @@ d'installation sur l'écran d'accueil ni de mode hors ligne à l'étape 2.
 Pour publier à la main, sans passer par un tag :
 `./deploy/deploy.sh utilisateur@ip-du-vps`.
 
-## Ce qui vient ensuite (étape 2)
+## Ce qui vient ensuite
 
-Impression A4 300 dpi et export PDF, portail parental avant tout partage,
-installation PWA et fonctionnement hors ligne, puis mise en ligne sur
-`tosca.walautao.fr`.
+Coloriage par numéros, autocollants et tampons, rejeu accéléré du coloriage,
+photo et dessin transformés en modèle, et les thèmes suivants.
 
 ## Structure
 

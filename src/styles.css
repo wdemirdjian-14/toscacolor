@@ -383,3 +383,71 @@ canvas.board { flex: 1 1 auto; width: 100%; display: block; touch-action: none; 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
+
+/* ------------------------------------------------- fin de coloriage, portail */
+
+.finish-actions { display: flex; gap: 10px; margin-bottom: 14px; }
+.finish-actions .wide {
+  flex: 1;
+  min-height: 56px;
+  border-radius: 16px;
+  background: var(--paper);
+  border: 2px solid var(--line);
+  font-weight: 700;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.finish-actions .wide:active { background: #e9e6f2; }
+.finish-actions svg { width: 22px; height: 22px; }
+
+.finish-note {
+  font-size: 13px !important;
+  line-height: 1.45;
+  color: var(--muted);
+  margin: 0 0 16px !important;
+}
+
+.gate-question {
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin: 4px 0 14px;
+  font-variant-numeric: tabular-nums;
+}
+.gate-wrong { color: var(--rose); font-weight: 700; margin: -6px 0 14px !important; font-size: 14px !important; }
+
+.box.busy { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.box.busy p { margin: 0; }
+.spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 4px solid var(--line);
+  border-top-color: var(--rose);
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation-duration: 2.4s; }
+}
+
+/* ------------------------------------------------------------- impression A4 */
+
+#print-area { display: none; }
+
+@media print {
+  /* Seule l'oeuvre est imprimée : ni barre d'outils, ni palette, ni fenêtre. */
+  #root { display: none !important; }
+  #print-area {
+    display: block !important;
+    position: absolute;
+    inset: 0;
+    margin: 0;
+  }
+  #print-area img { width: 100%; height: auto; display: block; }
+  @page { size: A4 portrait; margin: 0; }
+}

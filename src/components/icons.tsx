@@ -79,3 +79,19 @@ export const IconMagic = () => (
     <path d="M19.5 13.5 20 15l1.5.5L20 16l-.5 1.5L19 16l-1.5-.5L19 15Z" />
   </svg>
 )
+
+export const IconPrint = () => (
+  <svg viewBox="0 0 24 24" {...s}>
+    <path d="M7 9V4h10v5" />
+    <path d="M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2" />
+    <path d="M7 15h10v5H7z" />
+  </svg>
+)
+
+export const IconShare = () => (
+  <svg viewBox="0 0 24 24" {...s}>
+    <path d="M12 3v12" />
+    <path d="M8.5 6.5 12 3l3.5 3.5" />
+    <path d="M7 11H5v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8h-2" />
+  </svg>
+)

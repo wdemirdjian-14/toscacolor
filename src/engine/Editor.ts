@@ -1,5 +1,12 @@
 import { computeRegion, hexToRgb, paintRegion, regionToCanvas } from './floodFill'
-import { PAPER_H, PAPER_W, buildMask, makeCanvas, rasterizeLineArt } from './paper'
+import {
+  PAPER_H,
+  PAPER_W,
+  buildMask,
+  makeCanvas,
+  rasterizeLineArt,
+  releaseCanvas,
+} from './paper'
 
 export type ToolId = 'bucket' | 'brush' | 'pencil' | 'marker' | 'eraser'
 
@@ -24,6 +31,66 @@ export const TOOLS: Record<ToolId, ToolSpec> = {
 export type JournalOp =
   | { t: 'fill'; color: string; x: number; y: number }
   | { t: 'stroke'; tool: ToolId; color: string; size: number; easy: boolean; pts: number[] }
+  | { t: 'clear' }
+
+interface StrokePt {
+  x: number
+  y: number
+  p: number
+}
+
+/**
+ * Trace un geste complet sur un contexte quelconque.
+ *
+ * L'atelier dessine segment par segment pendant que le doigt bouge ; le rejeu,
+ * lui, redessine tout d'un coup a la resolution d'impression. Les deux passent
+ * par la meme geometrie pour que l'export ressemble a ce que l'enfant a vu.
+ */
+function paintStroke(
+  ctx: CanvasRenderingContext2D,
+  pts: StrokePt[],
+  tool: ToolId,
+  size: number,
+  colorHex: string,
+) {
+  if (!pts.length) return
+  const spec = TOOLS[tool]
+  const width = (p: number) => (spec.pressure ? size * (0.45 + p * 1.1) : size)
+
+  ctx.save()
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  if (tool === 'eraser') {
+    ctx.globalCompositeOperation = 'destination-out'
+    ctx.strokeStyle = '#000'
+    ctx.fillStyle = '#000'
+  } else {
+    ctx.strokeStyle = colorHex
+    ctx.fillStyle = colorHex
+  }
+
+  const first = pts[0]
+  ctx.beginPath()
+  ctx.arc(first.x, first.y, width(first.p) / 2, 0, Math.PI * 2)
+  ctx.fill()
+
+  for (let n = 2; n <= pts.length; n++) {
+    const a = pts[n - 2]
+    const b = pts[n - 1]
+    ctx.lineWidth = width(b.p)
+    ctx.beginPath()
+    if (n === 2) {
+      ctx.moveTo(a.x, a.y)
+      ctx.lineTo(b.x, b.y)
+    } else {
+      const z = pts[n - 3]
+      ctx.moveTo((z.x + a.x) / 2, (z.y + a.y) / 2)
+      ctx.quadraticCurveTo(a.x, a.y, (a.x + b.x) / 2, (a.y + b.y) / 2)
+    }
+    ctx.stroke()
+  }
+  ctx.restore()
+}
 
 interface Patch {
   x: number
@@ -48,6 +115,7 @@ export class Editor {
   private sctx = this.stroke.getContext('2d')!
   private preStroke = makeCanvas()
   private lineArt: HTMLCanvasElement | null = null
+  private svgSource = ''
   private mask: Uint8Array | null = null
 
   // outils
@@ -72,7 +140,9 @@ export class Editor {
   // historique
   private undoStack: Patch[] = []
   private redoStack: Patch[] = []
+  /** Le journal suit exactement la pile d'annulation : c'est lui qui sera rejoue. */
   journal: JournalOp[] = []
+  private redoJournal: JournalOp[] = []
 
   private frame = 0
   onChange: (() => void) | null = null
@@ -86,13 +156,17 @@ export class Editor {
 
   // ---------------------------------------------------------------- modele
 
-  async loadPaper(svg: string, savedPng?: string) {
+  async loadPaper(svg: string, savedPng?: string, savedJournal?: JournalOp[]) {
+    this.svgSource = svg
     this.lineArt = await rasterizeLineArt(svg)
     this.mask = buildMask(this.lineArt)
     this.cctx.clearRect(0, 0, PAPER_W, PAPER_H)
     this.undoStack = []
     this.redoStack = []
-    this.journal = []
+    // Le calque couleur est restaure en pixels pour l'affichage immediat, et le
+    // journal l'est aussi : sans lui, plus de reexport 300 dpi apres relecture.
+    this.journal = savedJournal ? [...savedJournal] : []
+    this.redoJournal = []
     if (savedPng) await this.restore(savedPng)
     this.fitToScreen()
     this.invalidate()
@@ -462,6 +536,7 @@ export class Editor {
     this.undoStack.push(patch)
     if (this.undoStack.length > 40) this.undoStack.shift()
     this.redoStack = []
+    this.redoJournal = []
   }
 
   canUndo() {
@@ -477,7 +552,8 @@ export class Editor {
     if (!p) return
     this.cctx.putImageData(p.before, p.x, p.y)
     this.redoStack.push(p)
-    this.journal.pop()
+    const op = this.journal.pop()
+    if (op) this.redoJournal.push(op)
     this.invalidate()
     this.onChange?.()
   }
@@ -487,6 +563,8 @@ export class Editor {
     if (!p) return
     this.cctx.putImageData(p.after, p.x, p.y)
     this.undoStack.push(p)
+    const op = this.redoJournal.pop()
+    if (op) this.journal.push(op)
     this.invalidate()
     this.onChange?.()
   }
@@ -496,7 +574,7 @@ export class Editor {
       this.cctx.clearRect(0, 0, PAPER_W, PAPER_H)
     })
     if (patch) this.push(patch)
-    this.journal = []
+    this.journal.push({ t: 'clear' })
     this.invalidate()
     this.onChange?.()
   }
@@ -539,6 +617,100 @@ export class Editor {
   }
 
   // ---------------------------------------------------------------- export
+
+  /**
+   * Reconstruit le coloriage a la resolution demandee en rejouant le journal.
+   *
+   * Agrandir le calque 150 dpi donnerait une impression floue. Ici le modele est
+   * rerasterise depuis le SVG et chaque geste est refait a l'echelle : le trait
+   * reste net, et les remplissages epousent les contours haute definition.
+   * `scale` 2 donne un A4 a 300 dpi.
+   */
+  async renderAtScale(scale: number): Promise<HTMLCanvasElement> {
+    const w = Math.round(PAPER_W * scale)
+    const h = Math.round(PAPER_H * scale)
+
+    const line = await rasterizeLineArt(this.svgSource, w, h)
+    const mask = buildMask(line)
+    const color = makeCanvas(w, h)
+    const cctx = color.getContext('2d', { willReadFrequently: true })!
+    const tmp = makeCanvas(w, h)
+    const tctx = tmp.getContext('2d')!
+
+    for (const op of this.journal) {
+      if (op.t === 'clear') {
+        cctx.clearRect(0, 0, w, h)
+        continue
+      }
+      if (op.t === 'fill') {
+        const region = computeRegion(mask, w, h, op.x * scale, op.y * scale)
+        if (region) paintRegion(cctx, mask, w, region, hexToRgb(op.color))
+        continue
+      }
+
+      const pts: StrokePt[] = []
+      for (let i = 0; i + 2 < op.pts.length; i += 3) {
+        pts.push({ x: op.pts[i] * scale, y: op.pts[i + 1] * scale, p: op.pts[i + 2] / 100 })
+      }
+      if (!pts.length) continue
+
+      if (op.tool === 'eraser') {
+        paintStroke(cctx, pts, 'eraser', op.size * scale, op.color)
+        continue
+      }
+
+      tctx.clearRect(0, 0, w, h)
+      paintStroke(tctx, pts, op.tool, op.size * scale, op.color)
+
+      if (op.easy) {
+        const region = computeRegion(mask, w, h, pts[0].x, pts[0].y, true)
+        if (region) {
+          const clip = regionToCanvas(region, w, h)
+          tctx.globalCompositeOperation = 'destination-in'
+          tctx.drawImage(clip, 0, 0)
+          tctx.globalCompositeOperation = 'source-over'
+          releaseCanvas(clip)
+        }
+      }
+      cctx.save()
+      cctx.globalAlpha = TOOLS[op.tool].alpha
+      cctx.drawImage(tmp, 0, 0)
+      cctx.restore()
+    }
+    releaseCanvas(tmp)
+
+    const out = makeCanvas(w, h)
+    const octx = out.getContext('2d')!
+    octx.fillStyle = '#ffffff'
+    octx.fillRect(0, 0, w, h)
+    octx.drawImage(color, 0, 0)
+    octx.drawImage(line, 0, 0)
+    releaseCanvas(color)
+    releaseCanvas(line)
+    return out
+  }
+
+  /**
+   * Version imprimable. Le rejeu est tente d'abord ; s'il echoue — memoire d'un
+   * vieil iPhone, journal absent parce que l'oeuvre vient d'une ancienne
+   * sauvegarde — on retombe sur l'agrandissement, moins net mais toujours la.
+   */
+  async printable(scale = 2): Promise<HTMLCanvasElement> {
+    if (this.journal.length) {
+      try {
+        const c = await this.renderAtScale(scale)
+        // Tracé volontaire : le jour où une impression sort floue, la console dit
+        // tout de suite si le rejeu a eu lieu ou si on est retombé sur l'agrandissement.
+        console.info(`impression : rejeu ${c.width}×${c.height}, ${this.journal.length} gestes`)
+        return c
+      } catch (e) {
+        console.warn('rejeu impossible, agrandissement du calque 150 dpi', e)
+      }
+    }
+    const c = this.flatten(scale)
+    console.info(`impression : agrandissement ${c.width}×${c.height}`)
+    return c
+  }
 
   /** Aplatit papier + couleur + trait. scale 2 donne du 300 dpi en A4. */
   flatten(scale = 1): HTMLCanvasElement {

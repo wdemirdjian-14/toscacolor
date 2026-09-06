@@ -3,6 +3,8 @@
  * C'est ce qui permet de ne collecter aucune donnee personnelle.
  */
 
+import type { JournalOp } from './Editor'
+
 const DB = 'toscacolor'
 const STORE = 'works'
 const VERSION = 1
@@ -14,6 +16,8 @@ export interface Work {
   title: string
   /** Calque couleur seul, en PNG. Le trait du modele est regenere au chargement. */
   colorPng: string
+  /** Les gestes, pour pouvoir reimprimer en 300 dpi apres avoir rouvert l'oeuvre. */
+  journal: JournalOp[]
   thumb: string
   signature: string
   done: boolean
