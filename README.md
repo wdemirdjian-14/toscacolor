@@ -97,16 +97,42 @@ cat ~/.ssh/tosca_deploy          # à coller dans VPS_SSH_KEY
 ### Préparation du serveur, une fois
 
 ```bash
-sudo apt update && sudo apt install -y nginx certbot python3-certbot-nginx rsync
-sudo mkdir -p /var/www/tosca && sudo chown -R $USER:www-data /var/www/tosca
-sudo cp deploy/nginx-tosca.conf /etc/nginx/sites-available/tosca
-sudo ln -s /etc/nginx/sites-available/tosca /etc/nginx/sites-enabled/
-sudo nginx -t && sudo systemctl reload nginx
-sudo certbot --nginx -d tosca.walautao.fr
+apt update && apt install -y nginx certbot python3-certbot-nginx rsync
+mkdir -p /var/www/tosca
+curl -fsSL https://raw.githubusercontent.com/wdemirdjian-14/toscacolor/main/deploy/nginx-tosca-app.conf \
+  > /etc/nginx/snippets/tosca-app.conf
+curl -fsSL https://raw.githubusercontent.com/wdemirdjian-14/toscacolor/main/deploy/nginx-tosca.conf \
+  > /etc/nginx/sites-available/tosca
+ln -sf /etc/nginx/sites-available/tosca /etc/nginx/sites-enabled/tosca
+nginx -t && systemctl reload nginx
+certbot --nginx -d tosca.walautao.fr
 ```
 
-Le HTTPS n'est pas optionnel : sans lui, pas de service worker, donc pas
-d'installation sur l'écran d'accueil ni de mode hors ligne à l'étape 2.
+Le HTTPS n'est pas optionnel : sans lui, le service worker ne s'enregistre pas,
+donc ni installation sur l'écran d'accueil ni mode hors ligne.
+
+Le compte de déploiement, à créer une fois lui aussi, n'a ni mot de passe ni
+sudo et ne peut écrire que dans le dossier du site :
+
+```bash
+useradd -m -s /bin/bash tosca
+mkdir -p /home/tosca/.ssh && chmod 700 /home/tosca/.ssh
+echo "<clé publique de déploiement>" > /home/tosca/.ssh/authorized_keys
+chmod 600 /home/tosca/.ssh/authorized_keys
+chown -R tosca:tosca /home/tosca/.ssh
+chown -R tosca:www-data /var/www/tosca
+```
+
+### Mettre à jour la configuration nginx
+
+Seul le snippet se remplace. **Ne jamais réécrire le vhost** une fois le
+certificat émis : il contient les blocs de Certbot.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/wdemirdjian-14/toscacolor/main/deploy/nginx-tosca-app.conf \
+  > /etc/nginx/snippets/tosca-app.conf
+nginx -t && systemctl reload nginx
+```
 
 Pour publier à la main, sans passer par un tag :
 `./deploy/deploy.sh utilisateur@ip-du-vps`.
