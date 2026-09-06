@@ -3,13 +3,14 @@ import { Editor, type ToolId } from '../engine/Editor'
 import { canvasToPng, fileName, printImage, shareImage, stampSignature } from '../engine/export'
 import { releaseCanvas } from '../engine/paper'
 import ParentGate from './ParentGate'
-import { PALETTE } from '../engine/palette'
+import { PALETTE, type Swatch } from '../engine/palette'
 import { getKidName, saveWork, setKidName, type Work } from '../engine/storage'
 import type { Coloring, Theme } from '../art'
 import {
   IconBack,
   IconBrush,
   IconBucket,
+  IconChevron,
   IconEraser,
   IconMagic,
   IconMarker,
@@ -21,12 +22,12 @@ import {
   IconUndo,
 } from './icons'
 
-const TOOL_LIST: Array<{ id: ToolId; label: string; icon: () => JSX.Element }> = [
-  { id: 'bucket', label: 'Pot', icon: IconBucket },
-  { id: 'brush', label: 'Pinceau', icon: IconBrush },
-  { id: 'pencil', label: 'Crayon', icon: IconPencil },
-  { id: 'marker', label: 'Feutre', icon: IconMarker },
-  { id: 'eraser', label: 'Gomme', icon: IconEraser },
+const TOOL_LIST: Array<{ id: ToolId; label: string; icon: () => JSX.Element; tint: string }> = [
+  { id: 'bucket', label: 'Pot', icon: IconBucket, tint: '#41A7DB' },
+  { id: 'brush', label: 'Pinceau', icon: IconBrush, tint: '#E4335A' },
+  { id: 'pencil', label: 'Crayon', icon: IconPencil, tint: '#F79038' },
+  { id: 'marker', label: 'Feutre', icon: IconMarker, tint: '#57BE6E' },
+  { id: 'eraser', label: 'Gomme', icon: IconEraser, tint: '#9159D6' },
 ]
 
 const SIZES = [12, 30, 68]
@@ -44,7 +45,9 @@ export default function ColoringView({ theme, page, saved, onExit }: Props) {
   const saveTimer = useRef<number | null>(null)
 
   const [tool, setTool] = useState<ToolId>('bucket')
-  const [color, setColor] = useState(PALETTE[6].hex)
+  const [toolsOpen, setToolsOpen] = useState(false)
+  const [color, setColor] = useState(PALETTE[0].hex)
+  const [effect, setEffect] = useState<Swatch['effect']>(PALETTE[0].effect)
   const [size, setSize] = useState(SIZES[1])
   const [easy, setEasy] = useState(true)
   const [history, setHistory] = useState({ undo: false, redo: false })
@@ -108,13 +111,13 @@ export default function ColoringView({ theme, page, saved, onExit }: Props) {
   // Les reglages vivent dans l'editeur ; React ne fait que les refleter.
   // On les applique aussi a la volee : sans cela, un enfant qui tape une couleur
   // puis le dessin dans la foulee peindrait encore avec la couleur precedente.
-  const apply = (patch: Partial<Pick<Editor, 'tool' | 'colorHex' | 'size' | 'easy'>>) => {
+  const apply = (patch: Partial<Pick<Editor, 'tool' | 'colorHex' | 'size' | 'easy' | 'effect'>>) => {
     if (editorRef.current) Object.assign(editorRef.current, patch)
   }
 
   useEffect(() => {
-    apply({ tool, colorHex: color, size, easy })
-  }, [tool, color, size, easy])
+    apply({ tool, colorHex: color, size, easy, effect: effect ?? null })
+  }, [tool, color, size, easy, effect])
 
   const leave = async () => {
     if (saveTimer.current) window.clearTimeout(saveTimer.current)
@@ -160,6 +163,9 @@ export default function ColoringView({ theme, page, saved, onExit }: Props) {
       setBusy(null)
     }
   }
+
+  const current = TOOL_LIST.find((t) => t.id === tool) ?? TOOL_LIST[0]
+  const CurrentIcon = current.icon
 
   const openFinish = () => {
     const ed = editorRef.current
@@ -216,41 +222,75 @@ export default function ColoringView({ theme, page, saved, onExit }: Props) {
       <canvas ref={canvasRef} className="board" />
 
       <div className="dock">
-        <div className="tools">
-          {TOOL_LIST.map((t) => {
-            const Icon = t.icon
-            return (
-              <button
-                key={t.id}
-                className="tool"
-                aria-pressed={tool === t.id}
-                onClick={() => {
-                  apply({ tool: t.id })
-                  setTool(t.id)
-                }}
-              >
-                <Icon />
-                {t.label}
-              </button>
-            )
-          })}
+        <div className="swatches">
+          {PALETTE.map((sw) => (
+            <button
+              key={sw.hex}
+              className={`swatch${sw.effect ? ' sparkly' : ''}`}
+              style={{ '--c': sw.hex } as React.CSSProperties}
+              aria-pressed={color === sw.hex}
+              aria-label={sw.name}
+              title={sw.name}
+              onClick={() => {
+                apply({ colorHex: sw.hex, effect: sw.effect ?? null })
+                setColor(sw.hex)
+                setEffect(sw.effect)
+                if (tool === 'eraser') {
+                  apply({ tool: 'bucket' })
+                  setTool('bucket')
+                }
+              }}
+            />
+          ))}
         </div>
 
         <div className="row">
-          <button
-            className="easy-btn"
-            aria-pressed={easy}
-            onClick={() =>
-            setEasy((v) => {
-              apply({ easy: !v })
-              return !v
-            })
-          }
-            title="Le trait reste dans la zone touchée"
-          >
-            <IconMagic />
-            <span>Facile</span>
-          </button>
+          <div className="tool-picker">
+            <button
+              className="tool-trigger"
+              aria-expanded={toolsOpen}
+              aria-haspopup="menu"
+              onClick={() => setToolsOpen((v) => !v)}
+              style={{ '--c': current.tint } as React.CSSProperties}
+            >
+              <CurrentIcon />
+              <span>{current.label}</span>
+              <IconChevron />
+            </button>
+
+            {toolsOpen && (
+              <>
+                <button
+                  className="tool-scrim"
+                  aria-label="Fermer le choix des ustensiles"
+                  onClick={() => setToolsOpen(false)}
+                />
+                <div className="tool-menu" role="menu">
+                  {TOOL_LIST.map((t) => {
+                    const Icon = t.icon
+                    return (
+                      <button
+                        key={t.id}
+                        role="menuitemradio"
+                        aria-checked={tool === t.id}
+                        className="tool"
+                        style={{ '--c': t.tint } as React.CSSProperties}
+                        onClick={() => {
+                          apply({ tool: t.id })
+                          setTool(t.id)
+                          setToolsOpen(false)
+                        }}
+                      >
+                        <Icon />
+                        {t.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+
           <div className="sizes">
             {SIZES.map((s) => (
               <button
@@ -267,25 +307,21 @@ export default function ColoringView({ theme, page, saved, onExit }: Props) {
               </button>
             ))}
           </div>
-          <div className="swatches">
-            {PALETTE.map((sw) => (
-              <button
-                key={sw.hex}
-                className="swatch"
-                style={{ background: sw.hex }}
-                aria-pressed={color === sw.hex}
-                aria-label={sw.name}
-                onClick={() => {
-                  apply({ colorHex: sw.hex })
-                  setColor(sw.hex)
-                  if (tool === 'eraser') {
-                    apply({ tool: 'bucket' })
-                    setTool('bucket')
-                  }
-                }}
-              />
-            ))}
-          </div>
+
+          <button
+            className="easy-btn"
+            aria-pressed={easy}
+            onClick={() =>
+              setEasy((v) => {
+                apply({ easy: !v })
+                return !v
+              })
+            }
+            title="Le trait reste dans la zone touchée"
+          >
+            <IconMagic />
+            <span>Facile</span>
+          </button>
         </div>
       </div>
 

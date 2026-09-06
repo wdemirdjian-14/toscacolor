@@ -95,3 +95,9 @@ export const IconShare = () => (
     <path d="M7 11H5v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8h-2" />
   </svg>
 )
+
+export const IconChevron = () => (
+  <svg viewBox="0 0 24 24" {...s}>
+    <path d="M7 14.5 12 9.5l5 5" />
+  </svg>
+)

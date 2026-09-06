@@ -261,29 +261,64 @@ canvas.board { flex: 1 1 auto; width: 100%; display: block; touch-action: none; 
   gap: 10px;
 }
 
-.tools { display: flex; gap: 8px; align-items: center; }
+/* Les ustensiles vivent dans un menu qui se déplie vers le haut : la palette
+   garde la première ligne, celle que le pouce atteint sans réfléchir. */
 
-.tool {
-  flex: 1 1 0;
-  min-width: 0;
-  height: 62px;
+.tool-picker { position: relative; flex: 0 0 auto; }
+
+.tool-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 56px;
+  padding: 0 14px;
   border-radius: 16px;
   background: var(--card);
-  border: 2px solid var(--line);
+  border: 2px solid var(--c);
+  color: var(--c);
+  font-weight: 700;
+  font-size: 15px;
+}
+.tool-trigger > svg:first-child { width: 26px; height: 26px; }
+.tool-trigger > svg:last-child { width: 18px; height: 18px; opacity: 0.55; }
+.tool-trigger[aria-expanded='true'] > svg:last-child { transform: rotate(180deg); }
+
+.tool-scrim { position: fixed; inset: 0; z-index: 25; background: transparent; border: 0; }
+
+.tool-menu {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 0;
+  z-index: 30;
+  min-width: 200px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--muted);
+  gap: 8px;
+  padding: 10px;
+  border-radius: 22px;
+  background: var(--card);
+  border: 2px solid var(--line);
+  box-shadow: 0 18px 44px rgba(35, 31, 43, 0.22);
 }
-.tool svg { width: 26px; height: 26px; }
-.tool[aria-pressed='true'] {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: #fff;
+
+.tool {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  height: 56px;
+  padding: 0 16px;
+  border-radius: 15px;
+  border: 2px solid transparent;
+  background: color-mix(in srgb, var(--c) 13%, #fff);
+  color: var(--c);
+  font-size: 16px;
+  font-weight: 700;
+}
+.tool svg { width: 26px; height: 26px; flex: 0 0 auto; }
+.tool[aria-checked='true'] {
+  border-color: var(--c);
+  background: color-mix(in srgb, var(--c) 22%, #fff);
 }
 
 .sizes { display: flex; gap: 8px; }
@@ -299,23 +334,39 @@ canvas.board { flex: 1 1 auto; width: 100%; display: block; touch-action: none; 
 .size i { display: block; border-radius: 50%; background: var(--ink); }
 .size[aria-pressed='true'] { border-color: var(--ink); background: #ece9f5; }
 
+/* La palette occupe la première ligne du dock, au-dessus des ustensiles. */
 .swatches {
   display: flex;
   gap: 9px;
   overflow-x: auto;
-  padding: 4px 2px 6px;
+  padding: 4px 2px 8px;
   scrollbar-width: none;
 }
 .swatches::-webkit-scrollbar { display: none; }
+
 .swatch {
-  width: 46px;
-  height: 46px;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
   flex: 0 0 auto;
+  background: var(--c);
   border: 3px solid #fff;
   box-shadow: 0 0 0 2px var(--line);
 }
 .swatch[aria-pressed='true'] { box-shadow: 0 0 0 4px var(--ink); transform: scale(1.06); }
+
+/* Les couleurs à paillettes se reconnaissent avant même d'être essayées. */
+.swatch.sparkly {
+  background:
+    radial-gradient(circle at 27% 26%, rgba(255, 255, 255, 0.95) 1.6px, transparent 2.4px),
+    radial-gradient(circle at 70% 38%, rgba(255, 255, 255, 0.85) 1.2px, transparent 2px),
+    radial-gradient(circle at 38% 72%, rgba(255, 255, 255, 0.9) 1.8px, transparent 2.6px),
+    radial-gradient(circle at 76% 74%, rgba(255, 255, 255, 0.8) 1.1px, transparent 1.9px),
+    linear-gradient(150deg,
+      color-mix(in srgb, var(--c) 72%, #fff) 0%,
+      var(--c) 48%,
+      color-mix(in srgb, var(--c) 84%, #000) 100%);
+}
 
 .row { display: flex; gap: 10px; align-items: center; }
 
@@ -370,14 +421,16 @@ canvas.board { flex: 1 1 auto; width: 100%; display: block; touch-action: none; 
   .easy-btn { padding: 0 12px; }
   .easy-btn span { display: none; }
   .done-btn { padding: 0 14px; font-size: 15px; }
-  .tool { height: 56px; }
+  .tool-trigger { padding: 0 10px; font-size: 14px; gap: 6px; }
+  .size { width: 48px; height: 44px; }
+  .sizes { gap: 6px; }
+  .swatch { width: 46px; height: 46px; }
 }
 
 @media (min-width: 820px) {
-  .tools { gap: 12px; }
-  .tool { flex: 0 0 96px; height: 68px; font-size: 12px; }
   .dock { padding-left: 24px; padding-right: 24px; }
-  .swatch { width: 50px; height: 50px; }
+  .swatch { width: 54px; height: 54px; }
+  .tool-menu { min-width: 230px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

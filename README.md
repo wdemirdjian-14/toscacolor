@@ -20,7 +20,10 @@ npm run dev
   donc jamais entamer le modèle.
 - **Mode facile** — le pinceau est bridé à la zone touchée en premier : l'enfant
   ne dépasse pas.
-- **Pinceau, crayon, feutre, gomme**, trois épaisseurs, 24 couleurs.
+- **Pinceau, crayon, feutre, gomme**, trois épaisseurs, 30 couleurs dont six à
+  paillettes. Le semis de paillettes est déterministe : chaque geste porte sa
+  graine, donc les mêmes éclats retombent au même endroit à l'écran, après une
+  annulation, et sur l'impression 300 dpi.
 - **Annuler / refaire** sur 40 étapes, par retouche de la zone modifiée
   (l'historique ne consomme pas toute la mémoire).
 - **Zoom et déplacement** à deux doigts, molette sur ordinateur.
@@ -31,6 +34,9 @@ npm run dev
 
 ### L'atelier
 
+- **La palette occupe la première ligne**, les paillettes en tête : c'est ce
+  qu'un enfant cherche en premier. Les ustensiles sont descendus dans un menu
+  qui se déplie vers le haut, chacun avec sa couleur.
 - **Sauvegarde automatique** dans IndexedDB, reprise d'un coloriage en cours,
   galerie « Mes coloriages », signature au prénom de l'enfant.
 - **10 coloriages licorne originaux**, classés en deux niveaux.

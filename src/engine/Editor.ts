@@ -1,4 +1,5 @@
 import { computeRegion, hexToRgb, paintRegion, regionToCanvas } from './floodFill'
+import { newSeed, sparkleRegion, sparkleStroke, type EffectId } from './effects'
 import {
   PAPER_H,
   PAPER_W,
@@ -29,8 +30,17 @@ export const TOOLS: Record<ToolId, ToolSpec> = {
 
 /** Une action, conservee pour rejouer le coloriage et le reexporter plus finement. */
 export type JournalOp =
-  | { t: 'fill'; color: string; x: number; y: number }
-  | { t: 'stroke'; tool: ToolId; color: string; size: number; easy: boolean; pts: number[] }
+  | { t: 'fill'; color: string; x: number; y: number; effect?: EffectId; seed?: number }
+  | {
+      t: 'stroke'
+      tool: ToolId
+      color: string
+      size: number
+      easy: boolean
+      pts: number[]
+      effect?: EffectId
+      seed?: number
+    }
   | { t: 'clear' }
 
 interface StrokePt {
@@ -121,6 +131,8 @@ export class Editor {
   // outils
   tool: ToolId = 'bucket'
   colorHex = '#E4335A'
+  /** Effet porté par la couleur choisie (les paillettes, aujourd'hui). */
+  effect: EffectId | null = null
   size = 26
   easy = true
 
@@ -364,11 +376,22 @@ export class Editor {
     if (!this.mask) return
     const region = computeRegion(this.mask, PAPER_W, PAPER_H, x, y)
     if (!region) return
+    const effect = this.effect
+    const seed = newSeed()
     const patch = this.capture(region.x0, region.y0, region.x1, region.y1, () => {
       paintRegion(this.cctx, this.mask!, PAPER_W, region, hexToRgb(this.colorHex))
+      if (effect === 'paillettes') {
+        sparkleRegion(this.cctx, region.visited, PAPER_W, region, seed)
+      }
     })
     if (patch) this.push(patch)
-    this.journal.push({ t: 'fill', color: this.colorHex, x: Math.round(x), y: Math.round(y) })
+    this.journal.push({
+      t: 'fill',
+      color: this.colorHex,
+      x: Math.round(x),
+      y: Math.round(y),
+      ...(effect ? { effect, seed } : {}),
+    })
     this.invalidate()
     this.onChange?.()
   }
@@ -479,6 +502,19 @@ export class Editor {
     const x1 = Math.min(PAPER_W - 1, Math.ceil(this.strokeBox.x1 + pad))
     const y1 = Math.min(PAPER_H - 1, Math.ceil(this.strokeBox.y1 + pad))
 
+    const effect = this.tool === 'eraser' ? null : this.effect
+    const seed = newSeed()
+    if (effect === 'paillettes') {
+      sparkleStroke(this.sctx, this.pts, this.size, seed)
+      if (this.clipCanvas) {
+        // Le semis doit rester dans la zone, comme le trait lui-même.
+        this.sctx.save()
+        this.sctx.globalCompositeOperation = 'destination-in'
+        this.sctx.drawImage(this.clipCanvas, 0, 0)
+        this.sctx.restore()
+      }
+    }
+
     if (this.tool === 'eraser') {
       // Le calque couleur a deja ete entame : l'etat d'avant vient de la copie.
       const before = this.preStroke
@@ -503,6 +539,7 @@ export class Editor {
       size: this.size,
       easy: this.easy,
       pts: this.pts.flatMap((p) => [Math.round(p.x), Math.round(p.y), Math.round(p.p * 100)]),
+      ...(effect ? { effect, seed } : {}),
     })
 
     this.pts = []
@@ -644,7 +681,12 @@ export class Editor {
       }
       if (op.t === 'fill') {
         const region = computeRegion(mask, w, h, op.x * scale, op.y * scale)
-        if (region) paintRegion(cctx, mask, w, region, hexToRgb(op.color))
+        if (region) {
+          paintRegion(cctx, mask, w, region, hexToRgb(op.color))
+          if (op.effect === 'paillettes' && op.seed !== undefined) {
+            sparkleRegion(cctx, region.visited, w, region, op.seed, scale)
+          }
+        }
         continue
       }
 
@@ -661,6 +703,9 @@ export class Editor {
 
       tctx.clearRect(0, 0, w, h)
       paintStroke(tctx, pts, op.tool, op.size * scale, op.color)
+      if (op.effect === 'paillettes' && op.seed !== undefined) {
+        sparkleStroke(tctx, pts, op.size * scale, op.seed, scale)
+      }
 
       if (op.easy) {
         const region = computeRegion(mask, w, h, pts[0].x, pts[0].y, true)
