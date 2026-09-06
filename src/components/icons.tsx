@@ -101,3 +101,28 @@ export const IconChevron = () => (
     <path d="M7 14.5 12 9.5l5 5" />
   </svg>
 )
+
+export const IconCamera = () => (
+  <svg viewBox="0 0 24 24" {...s}>
+    <path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2.2l1.2-2h8.2l1.2 2h2.2A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5Z" />
+    <circle cx="12" cy="13" r="3.6" />
+  </svg>
+)
+
+export const IconExpand = () => (
+  <svg viewBox="0 0 24 24" {...s}>
+    <path d="M4 9V4h5" />
+    <path d="M20 15v5h-5" />
+    <path d="M15 4h5v5" />
+    <path d="M9 20H4v-5" />
+  </svg>
+)
+
+export const IconShrink = () => (
+  <svg viewBox="0 0 24 24" {...s}>
+    <path d="M9 4v5H4" />
+    <path d="M15 20v-5h5" />
+    <path d="M20 9h-5V4" />
+    <path d="M4 15h5v5" />
+  </svg>
+)

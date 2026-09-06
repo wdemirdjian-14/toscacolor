@@ -521,3 +521,213 @@ canvas.board { flex: 1 1 auto; width: 100%; display: block; touch-action: none; 
 }
 .offline-pret { background: #e9f7ee; border-color: #57be6e; color: #1e6b43; }
 .offline-indisponible { background: #fdf1e3; border-color: #e2a94a; color: #8a5a12; }
+
+/* ------------------------------------------------- photo → coloriage */
+
+.photo-cta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  text-align: left;
+  padding: 18px 20px;
+  margin-bottom: 4px;
+  border-radius: var(--radius);
+  border: 2px solid var(--violet);
+  background: linear-gradient(135deg, #f3ecfd 0%, #fdf0f5 100%);
+  color: var(--ink);
+}
+.photo-cta:active { transform: scale(0.99); }
+.photo-cta svg { width: 34px; height: 34px; flex: 0 0 auto; color: var(--violet); }
+.photo-cta b { display: block; font-family: 'Baloo 2', sans-serif; font-size: 19px; }
+.photo-cta i { display: block; font-style: normal; font-size: 13px; color: var(--muted); font-weight: 600; }
+
+.photo-note { color: var(--muted); font-weight: 600; font-size: 14px; margin: -6px 0 18px; }
+
+.photo-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 46px 24px;
+  border-radius: var(--radius);
+  border: 3px dashed var(--line);
+  background: var(--card);
+  text-align: center;
+}
+.photo-drop svg { width: 46px; height: 46px; color: var(--violet); }
+.photo-drop b { font-family: 'Baloo 2', sans-serif; font-size: 21px; }
+.photo-drop span { font-size: 14px; color: var(--muted); font-weight: 600; max-width: 34ch; }
+
+.photo-stage {
+  display: grid;
+  place-items: center;
+  padding: 14px;
+  border-radius: var(--radius);
+  background: #d9d5e4;
+}
+.photo-preview {
+  width: auto;
+  max-width: 100%;
+  max-height: 52vh;
+  aspect-ratio: 1240 / 1754;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 8px 26px rgba(28, 24, 38, 0.18);
+}
+
+.detail { display: block; margin: 20px 0 6px; }
+.detail-label { font-weight: 700; font-size: 15px; display: block; margin-bottom: 8px; }
+.detail input[type='range'] { width: 100%; accent-color: var(--violet); height: 34px; }
+.detail-ends { display: flex; justify-content: space-between; }
+.detail-ends b { font-size: 12px; color: var(--muted); font-weight: 700; }
+
+.photo-title {
+  font: inherit;
+  font-weight: 700;
+  width: 100%;
+  min-height: 52px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  border: 2px solid var(--line);
+  background: var(--card);
+  margin: 14px 0;
+}
+.photo-actions { display: flex; gap: 10px; }
+.photo-actions button {
+  flex: 1;
+  min-height: 56px;
+  border-radius: 16px;
+  font-weight: 700;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.photo-actions svg { width: 22px; height: 22px; }
+.photo-actions .primary { background: var(--rose); color: #fff; }
+.photo-actions .ghost { background: var(--card); border: 2px solid var(--line); }
+.photo-error {
+  color: var(--rose);
+  font-weight: 700;
+  font-size: 14px;
+  margin-top: 14px;
+}
+
+.page-slot { position: relative; }
+.page-slot .page-card { width: 100%; }
+.page-delete {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--card);
+  border: 2px solid var(--line);
+  font-size: 20px;
+  line-height: 1;
+  color: var(--muted);
+}
+
+/* -------------------------------------------------- plein écran, outils flottants */
+
+.studio.immersive .topbar,
+.studio.immersive .dock { display: none; }
+.studio.immersive canvas.board { flex: 1 1 auto; }
+
+.floating {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 7px 10px;
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--card) 92%, transparent);
+  backdrop-filter: blur(10px);
+  border: 2px solid var(--line);
+  box-shadow: 0 14px 38px rgba(28, 24, 38, 0.24);
+  touch-action: none;
+}
+
+.grip {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 0 4px;
+  cursor: grab;
+  width: 100%;
+  align-items: center;
+  background: none;
+  border: 0;
+}
+.grip span { display: block; width: 22px; height: 3px; border-radius: 2px; background: var(--line); }
+.grip:active { cursor: grabbing; }
+
+.fbtn {
+  width: 50px;
+  height: 50px;
+  border-radius: 15px;
+  display: grid;
+  place-items: center;
+  background: var(--paper);
+  border: 2px solid transparent;
+  color: var(--ink-soft);
+  flex: 0 0 auto;
+}
+.fbtn svg { width: 25px; height: 25px; }
+.fbtn:disabled { opacity: 0.3; }
+.fbtn[style*='--c'] { color: var(--c); border-color: color-mix(in srgb, var(--c) 40%, transparent); }
+.fbtn[aria-pressed='true'] { background: #e9f7ee; border-color: #57be6e; color: #1e6b43; }
+
+.fcolor { background: var(--c); border: 3px solid #fff; box-shadow: 0 0 0 2px var(--line); }
+.fcolor.sparkly {
+  background:
+    radial-gradient(circle at 28% 27%, rgba(255, 255, 255, 0.95) 1.6px, transparent 2.4px),
+    radial-gradient(circle at 70% 40%, rgba(255, 255, 255, 0.85) 1.2px, transparent 2px),
+    radial-gradient(circle at 38% 72%, rgba(255, 255, 255, 0.9) 1.8px, transparent 2.6px),
+    linear-gradient(150deg,
+      color-mix(in srgb, var(--c) 72%, #fff) 0%,
+      var(--c) 48%,
+      color-mix(in srgb, var(--c) 84%, #000) 100%);
+}
+.fsize i { display: block; border-radius: 50%; background: var(--ink); }
+.fdone {
+  width: 50px;
+  height: 44px;
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  background: var(--rose);
+  color: #fff;
+}
+.fsep { width: 30px; height: 2px; background: var(--line); border-radius: 2px; margin: 2px 0; }
+
+.fscrim { position: fixed; inset: 0; z-index: -1; background: transparent; border: 0; }
+.fpanel {
+  position: absolute;
+  right: calc(100% + 12px);
+  top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 20px;
+  background: var(--card);
+  border: 2px solid var(--line);
+  box-shadow: 0 18px 44px rgba(35, 31, 43, 0.24);
+  max-height: min(70vh, 460px);
+  overflow-y: auto;
+}
+.fpanel-couleurs { width: min(300px, 74vw); }
+.fswatches { display: grid; grid-template-columns: repeat(5, 1fr); gap: 9px; }
+.fswatches .swatch { width: 100%; aspect-ratio: 1; height: auto; }
+.fpanel .size { width: 62px; }
+
+/* Barre posée dans la moitié gauche : le panneau s'ouvre de l'autre côté,
+   sinon il sortirait de l'écran. */
+.floating.at-left .fpanel { right: auto; left: calc(100% + 12px); }

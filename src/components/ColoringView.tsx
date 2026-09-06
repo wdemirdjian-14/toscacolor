@@ -3,6 +3,7 @@ import { Editor, type ToolId } from '../engine/Editor'
 import { canvasToPng, fileName, printImage, shareImage, stampSignature } from '../engine/export'
 import { releaseCanvas } from '../engine/paper'
 import ParentGate from './ParentGate'
+import FloatingTools from './FloatingTools'
 import { PALETTE, type Swatch } from '../engine/palette'
 import { getKidName, saveWork, setKidName, type Work } from '../engine/storage'
 import type { Coloring, Theme } from '../art'
@@ -12,6 +13,7 @@ import {
   IconBucket,
   IconChevron,
   IconEraser,
+  IconExpand,
   IconMagic,
   IconMarker,
   IconPencil,
@@ -44,8 +46,9 @@ export default function ColoringView({ theme, page, saved, onExit }: Props) {
   const editorRef = useRef<Editor | null>(null)
   const saveTimer = useRef<number | null>(null)
 
-  const [tool, setTool] = useState<ToolId>('bucket')
+  const [tool, setTool] = useState<ToolId>('brush')
   const [toolsOpen, setToolsOpen] = useState(false)
+  const [immersive, setImmersive] = useState(false)
   const [color, setColor] = useState(PALETTE[0].hex)
   const [effect, setEffect] = useState<Swatch['effect']>(PALETTE[0].effect)
   const [size, setSize] = useState(SIZES[1])
@@ -95,7 +98,7 @@ export default function ColoringView({ theme, page, saved, onExit }: Props) {
     window.addEventListener('resize', onResize)
     window.addEventListener('orientationchange', onResize)
 
-    void editor.loadPaper(page.svg(), saved?.colorPng, saved?.journal).then(() => {
+    void editor.loadPaper(page.art(), saved?.colorPng, saved?.journal).then(() => {
       editor.resize()
     })
 
@@ -167,6 +170,34 @@ export default function ColoringView({ theme, page, saved, onExit }: Props) {
     }
   }
 
+  /** Plein écran : la page occupe tout, les outils passent au-dessus d'elle. */
+  const toggleImmersive = () => {
+    setImmersive((v) => {
+      const next = !v
+      // L'API plein écran n'existe pas sur iPad ; l'installation sur l'écran
+      // d'accueil y joue le même rôle. On tente, sans en dépendre.
+      try {
+        if (next) void document.documentElement.requestFullscreen?.()
+        else if (document.fullscreenElement) void document.exitFullscreen?.()
+      } catch {
+        /* le navigateur refuse : la mise en page suffit */
+      }
+      return next
+    })
+    // La zone de dessin change de taille : il faut recadrer la page.
+    setTimeout(() => editorRef.current?.resize(), 60)
+  }
+
+  const pickSwatch = (sw: Swatch) => {
+    apply({ colorHex: sw.hex, effect: sw.effect ?? null })
+    setColor(sw.hex)
+    setEffect(sw.effect)
+    if (tool === 'eraser') {
+      apply({ tool: 'bucket' })
+      setTool('bucket')
+    }
+  }
+
   const current = TOOL_LIST.find((t) => t.id === tool) ?? TOOL_LIST[0]
   const CurrentIcon = current.icon
 
@@ -184,7 +215,7 @@ export default function ColoringView({ theme, page, saved, onExit }: Props) {
   }
 
   return (
-    <div className="studio">
+    <div className={`studio${immersive ? ' immersive' : ''}`}>
       <div className="topbar">
         <button className="icon-btn" onClick={leave} aria-label="Retour">
           <IconBack />
@@ -206,6 +237,9 @@ export default function ColoringView({ theme, page, saved, onExit }: Props) {
           <IconRedo />
         </button>
         <span className="title">{page.title}</span>
+        <button className="icon-btn" onClick={toggleImmersive} aria-label="Plein écran">
+          <IconExpand />
+        </button>
         <button
           className="icon-btn"
           onClick={() =>
@@ -234,15 +268,7 @@ export default function ColoringView({ theme, page, saved, onExit }: Props) {
               aria-pressed={color === sw.hex}
               aria-label={sw.name}
               title={sw.name}
-              onClick={() => {
-                apply({ colorHex: sw.hex, effect: sw.effect ?? null })
-                setColor(sw.hex)
-                setEffect(sw.effect)
-                if (tool === 'eraser') {
-                  apply({ tool: 'bucket' })
-                  setTool('bucket')
-                }
-              }}
+              onClick={() => pickSwatch(sw)}
             />
           ))}
         </div>
@@ -327,6 +353,37 @@ export default function ColoringView({ theme, page, saved, onExit }: Props) {
           </button>
         </div>
       </div>
+
+      {immersive && (
+        <FloatingTools
+          tool={tool}
+          color={color}
+          size={size}
+          sizes={SIZES}
+          easy={easy}
+          canUndo={history.undo}
+          canRedo={history.redo}
+          onTool={(t) => {
+            apply({ tool: t })
+            setTool(t)
+          }}
+          onColor={pickSwatch}
+          onSize={(n) => {
+            apply({ size: n })
+            setSize(n)
+          }}
+          onEasy={() =>
+            setEasy((v) => {
+              apply({ easy: !v })
+              return !v
+            })
+          }
+          onUndo={() => editorRef.current?.undo()}
+          onRedo={() => editorRef.current?.redo()}
+          onExit={toggleImmersive}
+          onDone={openFinish}
+        />
+      )}
 
       {finishing && !gate && (
         <div className="sheet" role="dialog" aria-label="Terminer le coloriage">

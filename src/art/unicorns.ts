@@ -1,3 +1,4 @@
+import type { LineArt } from '../engine/paper'
 import {
   VB_H,
   VB_W,
@@ -395,20 +396,22 @@ export interface Coloring {
   id: string
   title: string
   level: Level
-  svg: () => string
+  art: () => LineArt
+  /** Vignette déjà prête, pour les modèles dont le trait pèse lourd. */
+  thumb?: string
 }
 
 export const UNICORN_PAGES: Coloring[] = [
-  { id: 'tete', title: 'Tête de licorne', level: 'facile', svg: tete },
-  { id: 'arc', title: 'Arc-en-ciel', level: 'facile', svg: arcEnCiel },
-  { id: 'cupcake', title: 'Cupcake licorne', level: 'facile', svg: cupcake },
-  { id: 'lune', title: 'La lune et les étoiles', level: 'facile', svg: lune },
-  { id: 'baguette', title: 'Baguette magique', level: 'facile', svg: baguette },
-  { id: 'licorne', title: 'Licorne dans le pré', level: 'moyen', svg: licorne },
-  { id: 'dodo', title: 'Dodo sur un nuage', level: 'moyen', svg: dodo },
-  { id: 'chateau', title: 'Le château', level: 'moyen', svg: chateau },
-  { id: 'jardin', title: 'Jardin magique', level: 'moyen', svg: jardin },
-  { id: 'tasse', title: 'Licorne dans la tasse', level: 'moyen', svg: tasse },
+  { id: 'tete', title: 'Tête de licorne', level: 'facile', art: () => ({ kind: 'svg', svg: tete() }) },
+  { id: 'arc', title: 'Arc-en-ciel', level: 'facile', art: () => ({ kind: 'svg', svg: arcEnCiel() }) },
+  { id: 'cupcake', title: 'Cupcake licorne', level: 'facile', art: () => ({ kind: 'svg', svg: cupcake() }) },
+  { id: 'lune', title: 'La lune et les étoiles', level: 'facile', art: () => ({ kind: 'svg', svg: lune() }) },
+  { id: 'baguette', title: 'Baguette magique', level: 'facile', art: () => ({ kind: 'svg', svg: baguette() }) },
+  { id: 'licorne', title: 'Licorne dans le pré', level: 'moyen', art: () => ({ kind: 'svg', svg: licorne() }) },
+  { id: 'dodo', title: 'Dodo sur un nuage', level: 'moyen', art: () => ({ kind: 'svg', svg: dodo() }) },
+  { id: 'chateau', title: 'Le château', level: 'moyen', art: () => ({ kind: 'svg', svg: chateau() }) },
+  { id: 'jardin', title: 'Jardin magique', level: 'moyen', art: () => ({ kind: 'svg', svg: jardin() }) },
+  { id: 'tasse', title: 'Licorne dans la tasse', level: 'moyen', art: () => ({ kind: 'svg', svg: tasse() }) },
 ]
 
 export { VB_W, VB_H }

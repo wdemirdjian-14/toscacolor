@@ -7,7 +7,8 @@ import type { JournalOp } from './Editor'
 
 const DB = 'toscacolor'
 const STORE = 'works'
-const VERSION = 1
+const PAPERS = 'papers'
+const VERSION = 2
 
 export interface Work {
   id: string // themeId:pageId
@@ -35,6 +36,9 @@ function open(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE)) {
         db.createObjectStore(STORE, { keyPath: 'id' })
       }
+      if (!db.objectStoreNames.contains(PAPERS)) {
+        db.createObjectStore(PAPERS, { keyPath: 'id' })
+      }
     }
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => reject(req.error)
@@ -42,22 +46,42 @@ function open(): Promise<IDBDatabase> {
   return dbPromise
 }
 
-function tx<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+function tx<T>(
+  store: string,
+  mode: IDBTransactionMode,
+  run: (store: IDBObjectStore) => IDBRequest<T>,
+): Promise<T> {
   return open().then(
     (db) =>
       new Promise<T>((resolve, reject) => {
-        const t = db.transaction(STORE, mode)
-        const req = run(t.objectStore(STORE))
+        const t = db.transaction(store, mode)
+        const req = run(t.objectStore(store))
         req.onsuccess = () => resolve(req.result)
         req.onerror = () => reject(req.error)
       }),
   )
 }
 
-export const saveWork = (work: Work) => tx('readwrite', (s) => s.put(work))
-export const getWork = (id: string) => tx<Work | undefined>('readonly', (s) => s.get(id))
-export const allWorks = () => tx<Work[]>('readonly', (s) => s.getAll())
-export const deleteWork = (id: string) => tx('readwrite', (s) => s.delete(id))
+export const saveWork = (work: Work) => tx(STORE, 'readwrite', (s) => s.put(work))
+export const getWork = (id: string) => tx<Work | undefined>(STORE, 'readonly', (s) => s.get(id))
+export const allWorks = () => tx<Work[]>(STORE, 'readonly', (s) => s.getAll())
+export const deleteWork = (id: string) => tx(STORE, 'readwrite', (s) => s.delete(id))
+
+/**
+ * Un modèle fabriqué par l'enfant à partir d'une photo.
+ * Le trait est stocké en 300 dpi : c'est lui qui sera imprimé, sans agrandissement.
+ */
+export interface Paper {
+  id: string
+  title: string
+  linePng: string
+  thumb: string
+  createdAt: number
+}
+
+export const savePaper = (paper: Paper) => tx(PAPERS, 'readwrite', (s) => s.put(paper))
+export const allPapers = () => tx<Paper[]>(PAPERS, 'readonly', (s) => s.getAll())
+export const deletePaper = (id: string) => tx(PAPERS, 'readwrite', (s) => s.delete(id))
 
 const KID_KEY = 'toscacolor.kid'
 export const getKidName = () => localStorage.getItem(KID_KEY) ?? ''

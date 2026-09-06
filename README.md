@@ -20,7 +20,7 @@ npm run dev
   donc jamais entamer le modèle.
 - **Mode facile** — le pinceau est bridé à la zone touchée en premier : l'enfant
   ne dépasse pas.
-- **Pinceau, crayon, feutre, gomme**, trois épaisseurs, 30 couleurs dont six à
+- **Pinceau par défaut**, puis pot, crayon, feutre, gomme ; trois épaisseurs, 30 couleurs dont six à
   paillettes. Le semis de paillettes est déterministe : chaque geste porte sa
   graine, donc les mêmes éclats retombent au même endroit à l'écran, après une
   annulation, et sur l'impression 300 dpi.
@@ -34,12 +34,38 @@ npm run dev
 
 ### L'atelier
 
+- **Plein écran** : le dessin occupe tout l'écran et les outils passent
+  au-dessus, dans une barre flottante qu'on déplace par sa poignée — sa place
+  est retenue d'une fois sur l'autre, parce qu'aucune position par défaut ne
+  convient à tous les dessins.
 - **La palette occupe la première ligne**, les paillettes en tête : c'est ce
   qu'un enfant cherche en premier. Les ustensiles sont descendus dans un menu
   qui se déplie vers le haut, chacun avec sa couleur.
 - **Sauvegarde automatique** dans IndexedDB, reprise d'un coloriage en cours,
   galerie « Mes coloriages », signature au prénom de l'enfant.
 - **10 coloriages licorne originaux**, classés en deux niveaux.
+
+### Une photo en coloriage
+
+Un enfant choisit une photo, un curseur règle la quantité de détails, et
+l'aperçu se met à jour immédiatement. Tout se calcule sur l'appareil : la photo
+n'est envoyée nulle part et ça fonctionne sans réseau.
+
+Le traitement enchaîne luminance et étalement du contraste, flou, gradient de
+Sobel, seuil par percentile piloté par le curseur, puis trois nettoyages qui
+font toute la différence :
+
+- **suppression des petits amas** — retirer les pixels isolés ne suffit pas, le
+  grain d'une photo produit des paquets de trois ou quatre pixels qui
+  mouchettent la page ; on mesure chaque tache et on jette les trop petites ;
+- **effacement du bord de la photo**, qui est un contour franc mais n'appartient
+  pas au sujet ;
+- **dilatation du trait**, qui referme les contours interrompus. C'est le point
+  critique : sans elle, le pot de peinture s'échappe au premier remplissage et
+  le coloriage est fichu.
+
+Le modèle est produit d'emblée en 300 dpi, donc une photo s'imprime aussi net
+qu'un coloriage de la bibliothèque. Comptez quelques secondes de fabrication.
 
 ### Sortie et impression
 

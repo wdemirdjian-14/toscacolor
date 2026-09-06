@@ -7,6 +7,7 @@ import {
   makeCanvas,
   rasterizeLineArt,
   releaseCanvas,
+  type LineArt,
 } from './paper'
 
 export type ToolId = 'bucket' | 'brush' | 'pencil' | 'marker' | 'eraser'
@@ -125,11 +126,11 @@ export class Editor {
   private sctx = this.stroke.getContext('2d')!
   private preStroke = makeCanvas()
   private lineArt: HTMLCanvasElement | null = null
-  private svgSource = ''
+  private source: LineArt = { kind: 'svg', svg: '' }
   private mask: Uint8Array | null = null
 
   // outils
-  tool: ToolId = 'bucket'
+  tool: ToolId = 'brush'
   colorHex = '#E4335A'
   /** Effet porté par la couleur choisie (les paillettes, aujourd'hui). */
   effect: EffectId | null = null
@@ -168,9 +169,9 @@ export class Editor {
 
   // ---------------------------------------------------------------- modele
 
-  async loadPaper(svg: string, savedPng?: string, savedJournal?: JournalOp[]) {
-    this.svgSource = svg
-    this.lineArt = await rasterizeLineArt(svg)
+  async loadPaper(art: LineArt, savedPng?: string, savedJournal?: JournalOp[]) {
+    this.source = art
+    this.lineArt = await rasterizeLineArt(art)
     this.mask = buildMask(this.lineArt)
     this.cctx.clearRect(0, 0, PAPER_W, PAPER_H)
     this.undoStack = []
@@ -667,7 +668,7 @@ export class Editor {
     const w = Math.round(PAPER_W * scale)
     const h = Math.round(PAPER_H * scale)
 
-    const line = await rasterizeLineArt(this.svgSource, w, h)
+    const line = await rasterizeLineArt(this.source, w, h)
     const mask = buildMask(line)
     const color = makeCanvas(w, h)
     const cctx = color.getContext('2d', { willReadFrequently: true })!

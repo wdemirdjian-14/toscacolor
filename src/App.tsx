@@ -1,14 +1,26 @@
 import { useEffect, useMemo, useState } from 'react'
-import { THEMES, type Coloring, type Level, type Theme } from './art'
+import { THEMES, previewUrl, type Coloring, type Level, type Theme } from './art'
 import ColoringView from './components/ColoringView'
-import { IconBack } from './components/icons'
-import { allWorks, getKidName, setKidName, type Work } from './engine/storage'
+import PhotoStudio from './components/PhotoStudio'
+import { IconBack, IconCamera } from './components/icons'
 import { watchOffline, type OfflineState } from './engine/offline'
+import {
+  allPapers,
+  allWorks,
+  deletePaper,
+  getKidName,
+  setKidName,
+  type Paper,
+  type Work,
+} from './engine/storage'
 
 type View =
   | { name: 'home' }
   | { name: 'theme'; themeId: string }
   | { name: 'color'; themeId: string; pageId: string }
+  | { name: 'photo' }
+
+const PHOTO_THEME_ID = 'mes-photos'
 
 const OFFLINE_LABEL: Record<OfflineState, string> = {
   preparation: 'Préparation…',
@@ -18,28 +30,75 @@ const OFFLINE_LABEL: Record<OfflineState, string> = {
 
 const OFFLINE_HINT: Record<OfflineState, string> = {
   preparation: "L'application se met en mémoire, patiente quelques secondes.",
-  pret: 'Tout est enregistré sur cet appareil : tu peux couper le Wi-Fi et colorier jusqu\'au bout.',
-  indisponible: "Le mode hors ligne demande une connexion sécurisée (https).",
+  pret: "Tout est enregistré sur cet appareil : tu peux couper le Wi-Fi et colorier jusqu'au bout.",
+  indisponible: 'Le mode hors ligne demande une connexion sécurisée (https).',
 }
-
-const svgUrl = (svg: string) => `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
 
 export default function App() {
   const [view, setView] = useState<View>({ name: 'home' })
   const [works, setWorks] = useState<Work[]>([])
+  const [papers, setPapers] = useState<Paper[]>([])
   const [kid, setKid] = useState(getKidName())
   const [offline, setOffline] = useState<OfflineState>('preparation')
 
   useEffect(() => watchOffline(setOffline), [])
 
-  const refresh = () => void allWorks().then((w) => setWorks(w.sort((a, b) => b.updatedAt - a.updatedAt)))
+  const refresh = () => {
+    void allWorks().then((w) => setWorks(w.sort((a, b) => b.updatedAt - a.updatedAt)))
+    void allPapers().then((p) => setPapers(p.sort((a, b) => b.createdAt - a.createdAt)))
+  }
   useEffect(refresh, [])
 
   const byId = useMemo(() => new Map(works.map((w) => [w.id, w])), [works])
 
+  // Les photos transformées forment un thème comme les autres, ce qui leur donne
+  // la même galerie, la même reprise et la même impression sans rien dupliquer.
+  const photoTheme = useMemo<Theme>(
+    () => ({
+      id: PHOTO_THEME_ID,
+      name: 'Mes photos',
+      accent: '#7B4FC0',
+      pages: papers.map<Coloring>((p) => ({
+        id: p.id,
+        title: p.title,
+        level: 'moyen' as Level,
+        thumb: p.thumb,
+        art: () => ({ kind: 'png', url: p.linePng }),
+      })),
+    }),
+    [papers],
+  )
+
+  const themes = useMemo(
+    () => (papers.length ? [photoTheme, ...THEMES] : THEMES),
+    [papers.length, photoTheme],
+  )
+
+  if (view.name === 'photo') {
+    return (
+      <PhotoStudio
+        onBack={() => setView({ name: 'home' })}
+        onCreated={(paper) => {
+          refresh()
+          setView({ name: 'color', themeId: PHOTO_THEME_ID, pageId: paper.id })
+        }}
+      />
+    )
+  }
+
   if (view.name === 'color') {
-    const theme = THEMES.find((t) => t.id === view.themeId)!
-    const page = theme.pages.find((p) => p.id === view.pageId)!
+    const theme = themes.find((t) => t.id === view.themeId)
+    const page = theme?.pages.find((p) => p.id === view.pageId)
+    if (!theme || !page) {
+      return (
+        <div className="screen">
+          <button className="back" onClick={() => setView({ name: 'home' })}>
+            <IconBack /> Accueil
+          </button>
+          <div className="empty">Ce coloriage n'existe plus.</div>
+        </div>
+      )
+    }
     return (
       <ColoringView
         theme={theme}
@@ -54,13 +113,22 @@ export default function App() {
   }
 
   if (view.name === 'theme') {
-    const theme = THEMES.find((t) => t.id === view.themeId)!
+    const theme = themes.find((t) => t.id === view.themeId)
+    if (!theme) return null
     return (
       <ThemeScreen
         theme={theme}
         works={byId}
         onBack={() => setView({ name: 'home' })}
         onOpen={(page) => setView({ name: 'color', themeId: theme.id, pageId: page.id })}
+        onDelete={
+          theme.id === PHOTO_THEME_ID
+            ? (page) => {
+                if (!confirm(`Supprimer « ${page.title} » ?`)) return
+                void deletePaper(page.id).then(refresh)
+              }
+            : undefined
+        }
       />
     )
   }
@@ -76,20 +144,28 @@ export default function App() {
             {OFFLINE_LABEL[offline]}
           </span>
           <div className="kid">
-          <label htmlFor="kid">Prénom</label>
-          <input
-            id="kid"
-            value={kid}
-            placeholder="Toi"
-            maxLength={18}
-            onChange={(e) => {
-              setKid(e.target.value)
-              setKidName(e.target.value)
-            }}
-          />
+            <label htmlFor="kid">Prénom</label>
+            <input
+              id="kid"
+              value={kid}
+              placeholder="Toi"
+              maxLength={18}
+              onChange={(e) => {
+                setKid(e.target.value)
+                setKidName(e.target.value)
+              }}
+            />
           </div>
         </div>
       </div>
+
+      <button className="photo-cta" onClick={() => setView({ name: 'photo' })}>
+        <IconCamera />
+        <span>
+          <b>Une photo en coloriage</b>
+          <i>Ton chat, ton doudou, toi — la photo reste sur cet appareil.</i>
+        </span>
+      </button>
 
       {works.length > 0 && (
         <>
@@ -114,7 +190,7 @@ export default function App() {
 
       <h2 className="section-title">Choisis un thème</h2>
       <div className="grid">
-        {THEMES.map((t) => (
+        {themes.map((t) => (
           <button
             key={t.id}
             className={`theme-card${t.soon ? ' soon' : ''}`}
@@ -142,17 +218,16 @@ function ThemeScreen({
   works,
   onBack,
   onOpen,
+  onDelete,
 }: {
   theme: Theme
   works: Map<string, Work>
   onBack: () => void
   onOpen: (page: Coloring) => void
+  onDelete?: (page: Coloring) => void
 }) {
   const [level, setLevel] = useState<Level | 'tous'>('tous')
-  const thumbs = useMemo(
-    () => new Map(theme.pages.map((p) => [p.id, svgUrl(p.svg())])),
-    [theme],
-  )
+  const thumbs = useMemo(() => new Map(theme.pages.map((p) => [p.id, previewUrl(p)])), [theme])
   const pages = theme.pages.filter((p) => level === 'tous' || p.level === level)
 
   return (
@@ -161,13 +236,15 @@ function ThemeScreen({
         <IconBack /> Thèmes
       </button>
       <h2 className="section-title">{theme.name}</h2>
-      <div className="filters">
-        {(['tous', 'facile', 'moyen'] as const).map((l) => (
-          <button key={l} aria-pressed={level === l} onClick={() => setLevel(l)}>
-            {l === 'tous' ? 'Tous' : l === 'facile' ? 'Grandes zones' : 'Plus détaillé'}
-          </button>
-        ))}
-      </div>
+      {!onDelete && (
+        <div className="filters">
+          {(['tous', 'facile', 'moyen'] as const).map((l) => (
+            <button key={l} aria-pressed={level === l} onClick={() => setLevel(l)}>
+              {l === 'tous' ? 'Tous' : l === 'facile' ? 'Grandes zones' : 'Plus détaillé'}
+            </button>
+          ))}
+        </div>
+      )}
       {pages.length === 0 ? (
         <div className="empty">Rien ici pour l'instant.</div>
       ) : (
@@ -175,16 +252,27 @@ function ThemeScreen({
           {pages.map((p) => {
             const w = works.get(`${theme.id}:${p.id}`)
             return (
-              <button key={p.id} className="page-card" onClick={() => onOpen(p)}>
-                <img className="thumb" src={w?.thumb ?? thumbs.get(p.id)} alt={p.title} />
-                <div className="meta">
-                  <b>{p.title}</b>
-                  <span>
-                    {p.level === 'facile' ? 'Grandes zones' : 'Plus détaillé'}
-                    {w ? (w.done ? ' · fini' : ' · en cours') : ''}
-                  </span>
-                </div>
-              </button>
+              <div key={p.id} className="page-slot">
+                <button className="page-card" onClick={() => onOpen(p)}>
+                  <img className="thumb" src={w?.thumb ?? thumbs.get(p.id)} alt={p.title} />
+                  <div className="meta">
+                    <b>{p.title}</b>
+                    <span>
+                      {p.level === 'facile' ? 'Grandes zones' : 'Plus détaillé'}
+                      {w ? (w.done ? ' · fini' : ' · en cours') : ''}
+                    </span>
+                  </div>
+                </button>
+                {onDelete && (
+                  <button
+                    className="page-delete"
+                    aria-label={`Supprimer ${p.title}`}
+                    onClick={() => onDelete(p)}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
             )
           })}
         </div>

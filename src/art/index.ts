@@ -1,5 +1,7 @@
 import { UNICORN_PAGES, type Coloring } from './unicorns'
 
+export type { LineArt } from '../engine/paper'
+
 export type { Coloring, Level } from './unicorns'
 
 export interface Theme {
@@ -23,6 +25,13 @@ export const THEMES: Theme[] = [
   { id: 'dinos', name: 'Dinosaures', accent: '#4CAF6E', pages: [], soon: true },
   { id: 'chateaux', name: 'Princesses & châteaux', accent: '#D96BA0', pages: [], soon: true },
 ]
+
+/** Vignette d'un modèle : le SVG tel quel, ou l'image déjà produite. */
+export function previewUrl(page: Coloring): string {
+  if (page.thumb) return page.thumb
+  const art = page.art()
+  return art.kind === 'svg' ? `data:image/svg+xml;utf8,${encodeURIComponent(art.svg)}` : art.url
+}
 
 export function findPage(themeId: string, pageId: string) {
   const theme = THEMES.find((t) => t.id === themeId)
