@@ -44,15 +44,33 @@ jobs:
           PORT: ${{ secrets.VPS_PORT }}
         run: |
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
-          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          # Un copier-coller depuis Windows ou certains navigateurs glisse des \r
+          # dans le secret, et ssh refuse alors la clé sans expliquer pourquoi.
+          printf '%s\n' "$SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           if [ -n "$KNOWN_HOSTS" ]; then
             # Empreinte épinglée : le runner ne peut pas être détourné vers un autre serveur.
-            printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+            printf '%s\n' "$KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
           else
             ssh-keyscan -p "${PORT:-22}" -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
           fi
           chmod 644 ~/.ssh/known_hosts
+
+      - name: Contrôler les secrets
+        env:
+          HOST: ${{ secrets.VPS_HOST }}
+          USER: ${{ secrets.VPS_USER }}
+          PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          [ -n "$HOST" ] || { echo "::error::VPS_HOST est vide"; exit 1; }
+          [ -n "$USER" ] || { echo "::error::VPS_USER est vide"; exit 1; }
+          echo "cible : $USER@$HOST port ${PORT:-22}"
+          # L'empreinte ne révèle rien, mais elle prouve que la clé est arrivée entière.
+          ssh-keygen -lf ~/.ssh/deploy_key \
+            || { echo "::error::VPS_SSH_KEY illisible : clé tronquée, ou collée sans ses retours à la ligne"; exit 1; }
+          echo "entrées known_hosts : $(wc -l < ~/.ssh/known_hosts)"
+          grep -c "$HOST" ~/.ssh/known_hosts >/dev/null \
+            || echo "::warning::aucune entrée known_hosts pour $HOST — vérifie que VPS_KNOWN_HOSTS a été scanné sur la même valeur que VPS_HOST"
 
       - name: Envoyer sur le VPS Ionos
         env:
@@ -62,7 +80,8 @@ jobs:
           DEST: ${{ secrets.VPS_PATH }}
         run: |
           TARGET="${DEST:-/var/www/tosca}"
-          ssh -i ~/.ssh/deploy_key -p "${PORT:-22}" "$USER@$HOST" "mkdir -p '$TARGET'"
+          ssh -v -o BatchMode=yes -i ~/.ssh/deploy_key -p "${PORT:-22}" \
+            "$USER@$HOST" "mkdir -p '$TARGET' && echo 'dossier prêt'"
           rsync -az --delete \
             -e "ssh -i ~/.ssh/deploy_key -p ${PORT:-22}" \
             dist/ "$USER@$HOST:$TARGET/"
