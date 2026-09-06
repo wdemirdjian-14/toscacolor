@@ -1,0 +1,96 @@
+name: Publication
+
+# Un tag = une mise en ligne. `git tag v1.0.0 && git push --tags`
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      raison:
+        description: 'Pourquoi cette publication manuelle'
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+jobs:
+  publier:
+    name: Compiler et mettre en ligne
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Compiler
+        env:
+          VITE_APP_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
+        run: npm run build
+
+      - name: Préparer la clé SSH
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+          HOST: ${{ secrets.VPS_HOST }}
+          PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          if [ -n "$KNOWN_HOSTS" ]; then
+            # Empreinte épinglée : le runner ne peut pas être détourné vers un autre serveur.
+            printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -p "${PORT:-22}" -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          fi
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Envoyer sur le VPS Ionos
+        env:
+          HOST: ${{ secrets.VPS_HOST }}
+          USER: ${{ secrets.VPS_USER }}
+          PORT: ${{ secrets.VPS_PORT }}
+          DEST: ${{ secrets.VPS_PATH }}
+        run: |
+          TARGET="${DEST:-/var/www/tosca}"
+          ssh -i ~/.ssh/deploy_key -p "${PORT:-22}" "$USER@$HOST" "mkdir -p '$TARGET'"
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key -p ${PORT:-22}" \
+            dist/ "$USER@$HOST:$TARGET/"
+
+      - name: Archiver le build
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ github.ref_name }}
+          path: dist
+          retention-days: 30
+
+      - name: Créer la release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tar -czf toscacolor-${{ github.ref_name }}.tar.gz -C dist .
+          gh release create "${{ github.ref_name }}" \
+            toscacolor-${{ github.ref_name }}.tar.gz \
+            --title "ToscaColor ${{ github.ref_name }}" \
+            --generate-notes
+
+      - name: Nettoyer la clé
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
+
+      - name: Vérifier que le site répond
+        run: |
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --retry 5 --retry-delay 5 https://tosca.walautao.fr/)
+          echo "https://tosca.walautao.fr -> HTTP $code"
+          test "$code" = "200"
