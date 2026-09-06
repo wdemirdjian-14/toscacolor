@@ -1,4 +1,4 @@
-import { PAPER_H, PAPER_W, makeCanvas } from './paper'
+import { PAPER_H, PAPER_W, makeCanvas, releaseCanvas } from './paper'
 
 /**
  * Transformer une photo en coloriage.
@@ -98,9 +98,23 @@ function blur(src: Float32Array, w: number, h: number, r: number): Float32Array 
   return out
 }
 
-/** Amplitude du gradient de Sobel : la force du contour en chaque point. */
-function sobel(src: Float32Array, w: number, h: number): Float32Array {
-  const out = new Float32Array(src.length)
+/** Trois passes de moyenne glissante : une bonne approximation du flou gaussien,
+ *  et à coût constant quel que soit le rayon. */
+function blur3(src: Float32Array, w: number, h: number, r: number): Float32Array {
+  return blur(blur(blur(src, w, h, r), w, h, r), w, h, r)
+}
+
+interface Gradient {
+  mag: Float32Array
+  gx: Float32Array
+  gy: Float32Array
+}
+
+/** Sobel, en conservant les composantes : la direction sert à affiner le trait. */
+function gradients(src: Float32Array, w: number, h: number): Gradient {
+  const mag = new Float32Array(src.length)
+  const gx = new Float32Array(src.length)
+  const gy = new Float32Array(src.length)
   for (let y = 1; y < h - 1; y++) {
     for (let x = 1; x < w - 1; x++) {
       const i = y * w + x
@@ -112,11 +126,157 @@ function sobel(src: Float32Array, w: number, h: number): Float32Array {
       const g = src[i + w - 1]
       const j = src[i + w]
       const k = src[i + w + 1]
-      const gx = a + 2 * d + g - (c + 2 * f + k)
-      const gy = a + 2 * b + c - (g + 2 * j + k)
-      out[i] = Math.hypot(gx, gy)
+      const dx = a + 2 * d + g - (c + 2 * f + k)
+      const dy = a + 2 * b + c - (g + 2 * j + k)
+      gx[i] = dx
+      gy[i] = dy
+      mag[i] = Math.hypot(dx, dy)
     }
   }
+  return { mag, gx, gy }
+}
+
+/**
+ * Affinage : on ne garde que la crête du contour.
+ *
+ * Un seuil brut sur l'amplitude donne des bourrelets de plusieurs pixels, aux
+ * bords dentelés. Ici chaque pixel n'est conservé que s'il est le maximum local
+ * dans la direction du gradient : il reste un trait d'un pixel, propre, qu'on
+ * épaissit ensuite volontairement à la largeur voulue.
+ */
+function nonMax(g: Gradient, w: number, h: number): Float32Array {
+  const { mag, gx, gy } = g
+  const out = new Float32Array(mag.length)
+  // tan(22,5°) : au-delà de ce rapport, le gradient est franchement horizontal.
+  const DIAG = 2.4142
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x
+      const m = mag[i]
+      if (m <= 0) continue
+      const ax = Math.abs(gx[i])
+      const ay = Math.abs(gy[i])
+      let n1: number
+      let n2: number
+      if (ax > ay * DIAG) {
+        n1 = mag[i - 1]
+        n2 = mag[i + 1]
+      } else if (ay > ax * DIAG) {
+        n1 = mag[i - w]
+        n2 = mag[i + w]
+      } else if (gx[i] * gy[i] > 0) {
+        n1 = mag[i - w - 1]
+        n2 = mag[i + w + 1]
+      } else {
+        n1 = mag[i - w + 1]
+        n2 = mag[i + w - 1]
+      }
+      if (m >= n1 && m >= n2) out[i] = m
+    }
+  }
+  return out
+}
+
+/**
+ * Double seuil avec propagation.
+ *
+ * C'est ce qui répare les traits interrompus sans ramener le bruit : les pixels
+ * francs amorcent le contour, les pixels faibles ne sont gardés que s'ils se
+ * rattachent à un pixel franc. Un point de grain isolé, lui, reste faible et
+ * seul, donc il tombe.
+ */
+function hysteresis(thin: Float32Array, w: number, h: number, high: number, low: number): Uint8Array {
+  const out = new Uint8Array(thin.length)
+  const stack: number[] = []
+  for (let i = 0; i < thin.length; i++) {
+    if (thin[i] >= high) {
+      out[i] = 1
+      stack.push(i)
+    }
+  }
+  while (stack.length) {
+    const i = stack.pop()!
+    const x = i % w
+    const y = (i / w) | 0
+    for (let dy = -1; dy <= 1; dy++) {
+      const yy = y + dy
+      if (yy < 1 || yy >= h - 1) continue
+      for (let dx = -1; dx <= 1; dx++) {
+        const xx = x + dx
+        if (xx < 1 || xx >= w - 1) continue
+        const j = yy * w + xx
+        if (!out[j] && thin[j] >= low) {
+          out[j] = 1
+          stack.push(j)
+        }
+      }
+    }
+  }
+  return out
+}
+
+/**
+ * Efface les zones grouillantes.
+ *
+ * C'est la vraie difference entre un contour et une texture. Une meche de
+ * cheveux, un pull tricote, un feuillage produisent des traits parfaitement
+ * francs : ni le seuil ni la longueur ne les distinguent d'un contour de
+ * visage. Leur densite, si — dans une touffe, un pixel sur trois est un
+ * contour, alors qu'un vrai contour est une ligne seule au milieu du vide.
+ *
+ * Et une zone qu'on ne peut pas colorier n'a rien a faire sur un coloriage.
+ */
+function clearBusyAreas(
+  edge: Uint8Array,
+  w: number,
+  h: number,
+  radius: number,
+  maxDensity: number,
+): Uint8Array {
+  const f = new Float32Array(edge.length)
+  for (let i = 0; i < edge.length; i++) f[i] = edge[i]
+  const density = blur(f, w, h, radius)
+  const out = new Uint8Array(edge.length)
+  for (let i = 0; i < out.length; i++) out[i] = density[i] > maxDensity ? 0 : edge[i]
+  return out
+}
+
+/**
+ * Agrandit le masque de contours vers la resolution de sortie.
+ *
+ * La detection se fait en petit, volontairement : c'est ce qui fait disparaitre
+ * la texture — une meche de cheveux, le grain d'un pull, le feuillage d'un
+ * arbre — tout en gardant les formes qui comptent. Le trait, lui, est fabrique
+ * ensuite a la taille voulue, donc il reste net a l'impression.
+ */
+function upscaleMask(edge: Uint8Array, sw: number, sh: number, w: number, h: number): Uint8Array {
+  const small = makeCanvas(sw, sh)
+  const sctx = small.getContext('2d')!
+  const img = sctx.createImageData(sw, sh)
+  for (let i = 0; i < edge.length; i++) if (edge[i]) img.data[i * 4 + 3] = 255
+  sctx.putImageData(img, 0, 0)
+
+  const big = makeCanvas(w, h)
+  const bctx = big.getContext('2d', { willReadFrequently: true })!
+  bctx.imageSmoothingEnabled = true
+  bctx.imageSmoothingQuality = 'high'
+  bctx.drawImage(small, 0, 0, w, h)
+  const data = bctx.getImageData(0, 0, w, h).data
+  const out = new Uint8Array(w * h)
+  for (let i = 0; i < out.length; i++) out[i] = data[i * 4 + 3] >= 80 ? 1 : 0
+  releaseCanvas(small)
+  releaseCanvas(big)
+  return out
+}
+
+/** Adoucit le contour du trait : moyenne locale puis re-seuillage. */
+function smoothMask(edge: Uint8Array, w: number, h: number, r: number): Uint8Array {
+  if (r < 1) return edge
+  const f = new Float32Array(edge.length)
+  for (let i = 0; i < edge.length; i++) f[i] = edge[i]
+  const soft = blur(f, w, h, r)
+  const out = new Uint8Array(edge.length)
+  for (let i = 0; i < out.length; i++) out[i] = soft[i] >= 0.45 ? 1 : 0
   return out
 }
 
@@ -138,24 +298,6 @@ function percentile(mag: Float32Array, keep: number): number {
     if (acc >= target) return (b / (BINS - 1)) * max
   }
   return 0
-}
-
-/** Retire les pixels isolés : le grain de la photo, pas un contour. */
-function despeckle(edge: Uint8Array, w: number, h: number): Uint8Array {
-  const out = new Uint8Array(edge.length)
-  out.set(edge)
-  for (let y = 1; y < h - 1; y++) {
-    for (let x = 1; x < w - 1; x++) {
-      const i = y * w + x
-      if (!edge[i]) continue
-      const n =
-        edge[i - w - 1] + edge[i - w] + edge[i - w + 1] +
-        edge[i - 1] + edge[i + 1] +
-        edge[i + w - 1] + edge[i + w] + edge[i + w + 1]
-      if (n < 2) out[i] = 0
-    }
-  }
-  return out
 }
 
 /**
@@ -248,41 +390,58 @@ export function photoToLineArt(
   w = PAPER_W,
   h = PAPER_H,
 ): HTMLCanvasElement {
-  const { data: src, rect } = fitToPage(img, w, h)
+  // La détection se fait toujours en petit, quelle que soit la taille demandée.
+  // C'est ce qui distingue une forme d'une texture : à 500 pixels de large, une
+  // mèche de cheveux n'est plus un contour, alors qu'un visage en reste un. Le
+  // curseur élargit cette fenêtre — plus elle est grande, plus les petits
+  // détails redeviennent des contours.
+  // La plage est volontairement étroite : au-delà, une photo un peu texturée
+  // vire au grouillement et ne se colorie plus. Mieux vaut un curseur dont
+  // toute la course sert que dix pour cent d'utile et le reste illisible.
+  const dw = Math.round(380 + detail * 120)
+  const dh = Math.round((dw * h) / w)
+
+  const { data: src, rect } = fitToPage(img, dw, dh)
   const gray = luma(src)
+  const smoothed = blur3(gray, dw, dh, 2)
+  const grad = gradients(smoothed, dw, dh)
+  const thin = nonMax(grad, dw, dh)
 
-  // Les rayons suivent la résolution : même rendu en aperçu et en 300 dpi.
-  const unit = w / PAPER_W
-  const smoothed = blur(gray, w, h, Math.max(1, Math.round(2.6 * unit)))
-  const mag = sobel(smoothed, w, h)
-
-  // Plus de détail = on garde une plus grande part des contours les plus francs.
-  const keep = 0.015 + detail * 0.075
-  const threshold = percentile(mag, keep)
-
-  let edge: Uint8Array = new Uint8Array(mag.length)
-  for (let i = 0; i < mag.length; i++) edge[i] = mag[i] >= threshold ? 1 : 0
+  // Le seuil haut amorce les contours, le seuil bas rattache leurs portions
+  // faibles. C'est ce qui répare un trait interrompu sans ramener le grain.
+  const high = percentile(thin, 0.018 + detail * 0.009)
+  let edge: Uint8Array = hysteresis(thin, dw, dh, high, high * 0.38)
 
   // Le bord de la photo contre la marge blanche est un contour très franc, mais
   // ce n'est pas un contour du sujet : on l'efface pour ne pas encadrer la page.
-  const band = Math.max(2, Math.round(3 * unit))
+  const band = 3
   const clearRows = (a: number, b: number) => {
-    for (let y = Math.max(0, Math.round(a)); y <= Math.min(h - 1, Math.round(b)); y++) {
-      edge.fill(0, y * w, y * w + w)
+    for (let y = Math.max(0, Math.round(a)); y <= Math.min(dh - 1, Math.round(b)); y++) {
+      edge.fill(0, y * dw, y * dw + dw)
     }
   }
   const clearCols = (a: number, b: number) => {
     const x0 = Math.max(0, Math.round(a))
-    const x1 = Math.min(w - 1, Math.round(b))
-    for (let y = 0; y < h; y++) for (let x = x0; x <= x1; x++) edge[y * w + x] = 0
+    const x1 = Math.min(dw - 1, Math.round(b))
+    for (let y = 0; y < dh; y++) for (let x = x0; x <= x1; x++) edge[y * dw + x] = 0
   }
   clearRows(rect.y - band, rect.y + band)
   clearRows(rect.y + rect.h - band, rect.y + rect.h + band)
   clearCols(rect.x - band, rect.x + band)
   clearCols(rect.x + rect.w - band, rect.x + rect.w + band)
-  edge = despeckle(edge, w, h)
-  edge = removeSmallBlobs(edge, w, h, Math.max(8, Math.round(26 * unit * unit)))
-  edge = dilate(edge, w, h, Math.max(1, Math.round(1.4 * unit)))
+
+  // Le grouillement d'abord, les miettes ensuite : nettoyer une touffe laisse
+  // des fragments qu'il faut ramasser dans la foulée.
+  edge = clearBusyAreas(edge, dw, dh, Math.max(6, Math.round(dw / 44)), 0.17 + detail * 0.11)
+  // Un contour est une longue chaîne ; une tache courte est du grain.
+  edge = removeSmallBlobs(edge, dw, dh, 30)
+
+  // Passage à la résolution demandée, puis fabrication du trait. L'épaisseur
+  // suit la page et non la détection : même dessin à l'écran et sur le papier.
+  const unit = w / PAPER_W
+  edge = upscaleMask(edge, dw, dh, w, h)
+  edge = dilate(edge, w, h, Math.max(1, Math.round(1.6 * unit)))
+  edge = smoothMask(edge, w, h, Math.max(1, Math.round(1.2 * unit)))
 
   const out = makeCanvas(w, h)
   const octx = out.getContext('2d')!

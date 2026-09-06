@@ -18,7 +18,7 @@ export default function PhotoStudio({
   onCreated: (paper: Paper) => void
 }) {
   const [image, setImage] = useState<HTMLImageElement | null>(null)
-  const [detail, setDetail] = useState(0.45)
+  const [detail, setDetail] = useState(0.35)
   const [title, setTitle] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)

@@ -8,6 +8,7 @@ import {
   allPapers,
   allWorks,
   deletePaper,
+  deleteWork,
   getKidName,
   setKidName,
   type Paper,
@@ -40,12 +41,16 @@ export default function App() {
   const [papers, setPapers] = useState<Paper[]>([])
   const [kid, setKid] = useState(getKidName())
   const [offline, setOffline] = useState<OfflineState>('preparation')
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => watchOffline(setOffline), [])
 
   const refresh = () => {
-    void allWorks().then((w) => setWorks(w.sort((a, b) => b.updatedAt - a.updatedAt)))
-    void allPapers().then((p) => setPapers(p.sort((a, b) => b.createdAt - a.createdAt)))
+    void Promise.all([allWorks(), allPapers()]).then(([w, p]) => {
+      setWorks(w.sort((a, b) => b.updatedAt - a.updatedAt))
+      setPapers(p.sort((a, b) => b.createdAt - a.createdAt))
+      setLoaded(true)
+    })
   }
   useEffect(refresh, [])
 
@@ -72,6 +77,13 @@ export default function App() {
   const themes = useMemo(
     () => (papers.length ? [photoTheme, ...THEMES] : THEMES),
     [papers.length, photoTheme],
+  )
+
+  // Un coloriage dont le modèle a disparu ne doit plus s'afficher. On se
+  // contente de le masquer : effacer d'office pourrait emporter des données
+  // pendant que la base est encore en train de se charger.
+  const visibleWorks = works.filter((w) =>
+    themes.some((t) => t.id === w.themeId && t.pages.some((p) => p.id === w.pageId)),
   )
 
   if (view.name === 'photo') {
@@ -125,7 +137,13 @@ export default function App() {
           theme.id === PHOTO_THEME_ID
             ? (page) => {
                 if (!confirm(`Supprimer « ${page.title} » ?`)) return
-                void deletePaper(page.id).then(refresh)
+                // Le modèle et le coloriage en cours sont deux enregistrements
+                // distincts : n'effacer que le premier laissait une vignette
+                // orpheline dans « Mes coloriages ».
+                void Promise.all([
+                  deletePaper(page.id),
+                  deleteWork(`${PHOTO_THEME_ID}:${page.id}`),
+                ]).then(refresh)
               }
             : undefined
         }
@@ -170,11 +188,11 @@ export default function App() {
         </span>
       </button>
 
-      {works.length > 0 && (
+      {loaded && visibleWorks.length > 0 && (
         <>
           <h2 className="section-title">Mes coloriages</h2>
           <div className="grid">
-            {works.map((w) => (
+            {visibleWorks.map((w) => (
               <button
                 key={w.id}
                 className="page-card"

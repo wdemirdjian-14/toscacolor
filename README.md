@@ -51,21 +51,34 @@ Un enfant choisit une photo, un curseur règle la quantité de détails, et
 l'aperçu se met à jour immédiatement. Tout se calcule sur l'appareil : la photo
 n'est envoyée nulle part et ça fonctionne sans réseau.
 
-Le traitement enchaîne luminance et étalement du contraste, flou, gradient de
-Sobel, seuil par percentile piloté par le curseur, puis trois nettoyages qui
-font toute la différence :
+La détection se fait **toujours en petit**, quelle que soit la taille demandée,
+et c'est le choix qui décide de tout : à 450 pixels de large, une mèche de
+cheveux n'est plus un contour alors qu'un visage en reste un. Le curseur élargit
+cette fenêtre. Le trait, lui, est fabriqué ensuite à la résolution voulue, donc
+il reste net à l'impression — et l'aperçu montre exactement ce qui sortira.
 
-- **suppression des petits amas** — retirer les pixels isolés ne suffit pas, le
-  grain d'une photo produit des paquets de trois ou quatre pixels qui
-  mouchettent la page ; on mesure chaque tache et on jette les trop petites ;
-- **effacement du bord de la photo**, qui est un contour franc mais n'appartient
-  pas au sujet ;
-- **dilatation du trait**, qui referme les contours interrompus. C'est le point
-  critique : sans elle, le pot de peinture s'échappe au premier remplissage et
-  le coloriage est fichu.
+Le traitement enchaîne luminance et étalement du contraste, flou, gradient de
+Sobel, puis :
+
+- **affinage sur la crête** — on ne garde que le maximum local dans la direction
+  du gradient. Un seuil brut donne des bourrelets dentelés ; ici il reste un
+  trait d'un pixel, qu'on épaissit ensuite volontairement ;
+- **double seuil avec propagation** — les pixels francs amorcent le contour, les
+  faibles ne sont gardés que s'ils s'y rattachent. C'est ce qui répare les traits
+  interrompus sans ramener le grain ;
+- **effacement des zones grouillantes** — la vraie différence entre un contour et
+  une texture n'est ni sa force ni sa longueur, c'est sa densité. Dans une touffe
+  de cheveux un pixel sur quatre est un contour ; un vrai contour est une ligne
+  seule au milieu du vide. Et une zone qu'on ne peut pas colorier n'a rien à
+  faire sur un coloriage ;
+- **suppression des taches courtes**, puis **effacement du bord de la photo**,
+  contour franc mais étranger au sujet ;
+- **dilatation du trait**, qui referme les contours restés ouverts. C'est le
+  point critique : sans elle, le pot de peinture s'échappe au premier
+  remplissage et le coloriage est fichu.
 
 Le modèle est produit d'emblée en 300 dpi, donc une photo s'imprime aussi net
-qu'un coloriage de la bibliothèque. Comptez quelques secondes de fabrication.
+qu'un coloriage de la bibliothèque, en moins d'une seconde.
 
 ### Sortie et impression
 
