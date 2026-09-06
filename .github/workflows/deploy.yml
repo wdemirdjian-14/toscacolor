@@ -52,7 +52,7 @@ jobs:
             # Empreinte épinglée : le runner ne peut pas être détourné vers un autre serveur.
             printf '%s\n' "$KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
           else
-            ssh-keyscan -p "${PORT:-22}" -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+            ssh-keyscan -p "${PORT:-22}" "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
           fi
           chmod 644 ~/.ssh/known_hosts
 
@@ -69,8 +69,18 @@ jobs:
           ssh-keygen -lf ~/.ssh/deploy_key \
             || { echo "::error::VPS_SSH_KEY illisible : clé tronquée, ou collée sans ses retours à la ligne"; exit 1; }
           echo "entrées known_hosts : $(wc -l < ~/.ssh/known_hosts)"
-          grep -c "$HOST" ~/.ssh/known_hosts >/dev/null \
-            || echo "::warning::aucune entrée known_hosts pour $HOST — vérifie que VPS_KNOWN_HOSTS a été scanné sur la même valeur que VPS_HOST"
+          if printf '%s' "$HOST" | grep -qE '^[0-9]+(\.[0-9]+){3}$'; then
+            echo "VPS_HOST est une adresse IP"
+          else
+            echo "VPS_HOST est un nom de domaine"
+          fi
+          # ssh-keygen -F fait la vraie recherche, celle que ssh fera ensuite.
+          if ssh-keygen -F "$HOST" -f ~/.ssh/known_hosts >/dev/null 2>&1; then
+            echo "known_hosts : entrée trouvée pour l'hôte visé"
+          else
+            echo "::error::known_hosts ne contient aucune entrée pour VPS_HOST. Les lignes ont été scannées sur une autre valeur (IP contre nom de domaine). Rescanne l'hôte exact, ou supprime le secret VPS_KNOWN_HOSTS."
+            exit 1
+          fi
 
       - name: Envoyer sur le VPS Ionos
         env:
@@ -80,10 +90,27 @@ jobs:
           DEST: ${{ secrets.VPS_PATH }}
         run: |
           TARGET="${DEST:-/var/www/tosca}"
-          ssh -v -o BatchMode=yes -i ~/.ssh/deploy_key -p "${PORT:-22}" \
-            "$USER@$HOST" "mkdir -p '$TARGET' && echo 'dossier prêt'"
+          KEY="$HOME/.ssh/deploy_key"
+          # La trace est capturee pour pouvoir nommer la cause : un code 255 nu
+          # ne dit pas si c'est la cle, l'utilisateur ou l'empreinte de l'hote.
+          if ! trace=$(ssh -v -o BatchMode=yes -i "$KEY" -p "${PORT:-22}" \
+                          "$USER@$HOST" "mkdir -p '$TARGET' && echo pret" 2>&1); then
+            echo "$trace" | tail -40
+            case "$trace" in
+              *"Host key verification failed"*)
+                echo "::error::Empreinte du serveur refusée. VPS_KNOWN_HOSTS ne correspond pas à VPS_HOST." ;;
+              *"Permission denied"*)
+                echo "::error::Clé rejetée. L'utilisateur VPS_USER n'a pas cette clé dans son authorized_keys — vérifie que VPS_USER vaut bien le compte de déploiement." ;;
+              *"Connection refused"*|*"Connection timed out"*|*"No route to host"*|*"Could not resolve"*)
+                echo "::error::Serveur injoignable. Vérifie VPS_HOST et VPS_PORT." ;;
+              *)
+                echo "::error::Échec SSH, voir la trace ci-dessus." ;;
+            esac
+            exit 1
+          fi
+          echo "$trace" | tail -2
           rsync -az --delete \
-            -e "ssh -i ~/.ssh/deploy_key -p ${PORT:-22}" \
+            -e "ssh -o BatchMode=yes -i $KEY -p ${PORT:-22}" \
             dist/ "$USER@$HOST:$TARGET/"
 
       - name: Archiver le build
