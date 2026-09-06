@@ -137,7 +137,10 @@ export default function App() {
     <div className="screen">
       <div className="masthead">
         <div className="logo">
-          Tosca<span>Color</span>
+          <img src="/logo.png" alt="" width={54} height={54} />
+          <span className="wordmark">
+            Tosca<span>Color</span>
+          </span>
         </div>
         <div className="masthead-right">
           <span className={`offline offline-${offline}`} title={OFFLINE_HINT[offline]}>

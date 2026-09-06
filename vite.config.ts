@@ -10,7 +10,7 @@ export default defineConfig({
       // L'application enregistre le worker elle-même, pour savoir quand le
       // préchargement est terminé et pouvoir le dire à l'écran.
       injectRegister: null,
-      includeAssets: ['icon.svg', 'apple-touch-icon.png'],
+      includeAssets: ['favicon.png', 'apple-touch-icon.png', 'logo.png'],
       manifest: {
         name: 'ToscaColor',
         short_name: 'ToscaColor',
