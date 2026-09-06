@@ -137,6 +137,17 @@ jobs:
 
       - name: Vérifier que le site répond
         run: |
-          code=$(curl -sS -o /dev/null -w '%{http_code}' --retry 5 --retry-delay 5 https://tosca.walautao.fr/)
-          echo "https://tosca.walautao.fr -> HTTP $code"
-          test "$code" = "200"
+          url=https://tosca.walautao.fr/
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --retry 5 --retry-delay 5 "$url" 2>/tmp/curl.err || true)
+          echo "$url -> HTTP ${code:-aucune réponse}"
+          if [ "$code" = "200" ]; then exit 0; fi
+          cat /tmp/curl.err || true
+          # Les fichiers sont déjà en place : ce qui échoue ici, c'est l'accès public.
+          if grep -qi "certificate" /tmp/curl.err; then
+            echo "::error::Le déploiement a réussi, mais le certificat ne correspond pas à tosca.walautao.fr. Relancer sur le VPS : certbot --nginx -d tosca.walautao.fr — sans HTTPS, ni service worker, ni mode hors ligne, ni partage natif."
+          elif [ "$code" = "403" ]; then
+            echo "::error::Le serveur répond 403 : le dossier /var/www/tosca est vide ou nginx ne pointe pas dessus."
+          else
+            echo "::error::Le site ne répond pas correctement (HTTP ${code:-aucune réponse}). Le build et l'envoi ont pourtant réussi."
+          fi
+          exit 1
