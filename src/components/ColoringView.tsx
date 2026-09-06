@@ -136,6 +136,9 @@ export default function ColoringView({ theme, page, saved, onExit }: Props) {
 
   const buildPrintable = async () => {
     const ed = editorRef.current!
+    // Sans cette attente, une signature pourrait être tracée avec la police de
+    // repli si le rendu tombe pendant le chargement des polices.
+    await document.fonts.ready
     const canvas = await ed.printable(2)
     stampSignature(canvas, kid)
     return canvas

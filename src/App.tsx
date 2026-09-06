@@ -3,11 +3,24 @@ import { THEMES, type Coloring, type Level, type Theme } from './art'
 import ColoringView from './components/ColoringView'
 import { IconBack } from './components/icons'
 import { allWorks, getKidName, setKidName, type Work } from './engine/storage'
+import { watchOffline, type OfflineState } from './engine/offline'
 
 type View =
   | { name: 'home' }
   | { name: 'theme'; themeId: string }
   | { name: 'color'; themeId: string; pageId: string }
+
+const OFFLINE_LABEL: Record<OfflineState, string> = {
+  preparation: 'Préparation…',
+  pret: '✓ Marche sans réseau',
+  indisponible: 'Réseau nécessaire',
+}
+
+const OFFLINE_HINT: Record<OfflineState, string> = {
+  preparation: "L'application se met en mémoire, patiente quelques secondes.",
+  pret: 'Tout est enregistré sur cet appareil : tu peux couper le Wi-Fi et colorier jusqu\'au bout.',
+  indisponible: "Le mode hors ligne demande une connexion sécurisée (https).",
+}
 
 const svgUrl = (svg: string) => `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
 
@@ -15,6 +28,9 @@ export default function App() {
   const [view, setView] = useState<View>({ name: 'home' })
   const [works, setWorks] = useState<Work[]>([])
   const [kid, setKid] = useState(getKidName())
+  const [offline, setOffline] = useState<OfflineState>('preparation')
+
+  useEffect(() => watchOffline(setOffline), [])
 
   const refresh = () => void allWorks().then((w) => setWorks(w.sort((a, b) => b.updatedAt - a.updatedAt)))
   useEffect(refresh, [])
@@ -55,7 +71,11 @@ export default function App() {
         <div className="logo">
           Tosca<span>Color</span>
         </div>
-        <div className="kid">
+        <div className="masthead-right">
+          <span className={`offline offline-${offline}`} title={OFFLINE_HINT[offline]}>
+            {OFFLINE_LABEL[offline]}
+          </span>
+          <div className="kid">
           <label htmlFor="kid">Prénom</label>
           <input
             id="kid"
@@ -67,6 +87,7 @@ export default function App() {
               setKidName(e.target.value)
             }}
           />
+          </div>
         </div>
       </div>
 

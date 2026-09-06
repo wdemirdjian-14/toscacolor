@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
+import './fonts.css'
 import './styles.css'
 
 // Un enfant pose sa main partout : on coupe le zoom et le rebond de Safari.

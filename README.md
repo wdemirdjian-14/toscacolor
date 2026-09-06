@@ -55,10 +55,27 @@ npm run dev
 
 ### Installation et hors ligne
 
+L'application est **entièrement autonome**. Les coloriages sont dessinés par le
+programme, pas téléchargés ; les polices sont embarquées dans le bundle ; la
+sauvegarde, l'impression et le partage se font sur l'appareil. Une fois la page
+ouverte une première fois, **aucune requête ne part vers le réseau** — vérifié :
+zéro requête externe au chargement.
+
+Le service worker précharge les 18 fichiers de l'application dès la première
+visite. Un bandeau dans la bibliothèque dit où on en est :
+
+| Ce qui s'affiche | Ce que ça veut dire |
+| --- | --- |
+| `Préparation…` | le préchargement est en cours, quelques secondes |
+| `✓ Marche sans réseau` | tout est sur l'appareil, le Wi-Fi peut être coupé |
+| `Réseau nécessaire` | pas de HTTPS : le service worker ne peut pas s'installer |
+
 Installable sur l'écran d'accueil (manifeste, icônes, mode `standalone`, aucune
-orientation forcée). Le service worker précharge toute l'application ; les
-polices Google sont mises en cache à la première visite. Une fois installée,
-l'appli fonctionne sans réseau — voiture, train, salle d'attente.
+orientation forcée), ce qui masque la barre Safari et empêche du même coup
+l'enfant de sortir de l'application d'un geste.
+
+Testé serveur arrêté : la page se recharge, les dix coloriages s'ouvrent, les
+paillettes fonctionnent, et l'export 300 dpi sort normalement.
 
 ## Mise en ligne
 

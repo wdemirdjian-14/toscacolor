@@ -7,6 +7,9 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // L'application enregistre le worker elle-même, pour savoir quand le
+      // préchargement est terminé et pouvoir le dire à l'écran.
+      injectRegister: null,
       includeAssets: ['icon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'ToscaColor',
@@ -27,25 +30,9 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,png,svg,webmanifest}'],
-        // Les polices viennent de Google : sans cache, l'appli hors ligne
-        // retomberait sur les polices système.
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\//,
-            handler: 'StaleWhileRevalidate',
-            options: { cacheName: 'polices-css' },
-          },
-          {
-            urlPattern: /^https:\/\/fonts\.gstatic\.com\//,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'polices',
-              expiration: { maxEntries: 12, maxAgeSeconds: 60 * 60 * 24 * 365 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-        ],
+        // Tout ce dont l'application a besoin est préchargé à l'installation :
+        // une fois le premier chargement passé, plus rien n'est demandé au réseau.
+        globPatterns: ['**/*.{js,css,html,png,svg,webmanifest,woff2}'],
       },
     }),
   ],
